@@ -1,0 +1,26 @@
+{
+  "name": "dark-corporate",
+  "label": "Koyu kurumsal",
+  "colors": {
+    "primary": "#4FC3F7",
+    "secondary": "#81D4FA",
+    "accent": "#1E3A5F",
+    "background": "#0F1B2D",
+    "text": "#EAF2FA",
+    "muted": "#9FB3C8"
+  },
+  "fonts": {
+    "heading": "Calibri",
+    "body": "Calibri"
+  },
+  "spacing": {
+    "slide_title_size_pt": 32,
+    "slide_body_size_pt": 18,
+    "line_spacing_pt": 28
+  },
+  "rules": {
+    "max_bullets_per_slide": 6,
+    "max_fonts": 2,
+    "accent_lines_under_titles": false
+  }
+}

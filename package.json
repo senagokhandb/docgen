@@ -1,0 +1,10 @@
+{
+  "name": "docgen",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DOCGEN agent node dependencies (document generation libraries)",
+  "dependencies": {
+    "docx": "^9.14.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "docgen": {
+    "version": "1.0.0",
+    "updated": "2026-07-21"
+  },
+  "skills": {
+    "docx": {
+      "skillId": "docx",
+      "description": "Create, edit and validate Word (.docx) documents",
+      "enabled": true,
+      "tier": "core"
+    },
+    "pptx": {
+      "skillId": "pptx",
+      "description": "Create and edit PowerPoint (.pptx) decks with theme system",
+      "enabled": true,
+      "tier": "core"
+    },
+    "xlsx": {
+      "skillId": "xlsx",
+      "description": "Create and edit Excel (.xlsx) workbooks with formula QA",
+      "enabled": true,
+      "tier": "core"
+    },
+    "pdf": {
+      "skillId": "pdf",
+      "description": "Create and process PDF files via Gotenberg",
+      "enabled": true,
+      "tier": "core"
+    }
+  }
+}

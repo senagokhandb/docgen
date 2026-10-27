@@ -1,0 +1,28 @@
+/* DOCGEN theme: minimal — A4 print preset (HTML → Gotenberg) */
+@page { size: A4; margin: 20mm 18mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: Calibri, "Segoe UI", Arial, sans-serif;
+       font-size: 10.5pt; line-height: 1.55; color: #111111; }
+
+h1 { color: #111111; font-size: 19pt; margin: 0 0 14pt; }
+h2 { color: #111111; font-size: 12.5pt; margin: 16pt 0 6pt; page-break-after: avoid; }
+h3 { color: #444444; font-size: 11pt; margin: 12pt 0 4pt; page-break-after: avoid; }
+p  { margin: 0 0 8pt; text-align: justify; }
+ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+li { margin-bottom: 3pt; }
+a  { color: #444444; text-decoration: underline; }
+
+table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; page-break-inside: auto; }
+tr  { page-break-inside: avoid; }
+th, td { border: 1px solid #CCCCCC; padding: 4pt 6pt; font-size: 9.5pt; vertical-align: top; }
+th { background: #E8E8E8; color: #111111; text-align: left; font-weight: bold; }
+thead { display: table-header-group; }
+
+.subtitle { color: #777777; font-size: 11pt; margin-bottom: 16pt; }
+.callout { background: #F5F5F5; border-left: 3pt solid #111111;
+           padding: 8pt 10pt; margin: 10pt 0; page-break-inside: avoid; }
+img  { max-width: 100%; }
+.page-break { page-break-before: always; }
+.avoid-break { page-break-inside: avoid; }
+footer, .page-footer { color: #777777; font-size: 8pt; }

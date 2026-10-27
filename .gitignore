@@ -1,0 +1,19 @@
+# environment (model endpoint/anahtar — asla commit etme)
+.env
+
+# workspace verisi (yüklemeler, çıktılar, çalışma alanı)
+data/**
+!data/*/
+!data/*/.gitkeep
+
+# node
+node_modules/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# geçici
+*.tmp
+.DS_Store

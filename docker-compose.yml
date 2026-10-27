@@ -1,0 +1,49 @@
+# ============================================================
+# DOCGEN — Docker Compose
+# İki servis, tek iç ağ:
+#   gotenberg : render motoru (HTML->PDF, ofis->PDF, PDF işlemleri)
+#   agent     : Qwen Code agent (non-root sandbox) + Python/Node motoru
+# Kullanım:
+#   cp .env.example .env   # model endpoint/adınızı yazın
+#   docker compose build
+#   docker compose run --rm agent "Şirketim için 5 sayfalık bir sunu yap"
+# ============================================================
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: docgen-gotenberg
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+    networks:
+      - docgen
+    # Hosttan doğrudan erişim kapalı (yalnızca iç ağ).
+    # Gerekirse debug için şurayı açın:
+    # ports:
+    #   - "3000:3000"
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: docgen-agent:latest
+    container_name: docgen-agent
+    env_file:
+      - .env
+    environment:
+      GOTENBERG_URL: http://gotenberg:3000
+    volumes:
+      # Girdi / çıktı / çalışma alanı — makineye eşlenir.
+      # Agent'ın gördüğü kök: /workspace
+      - ./data:/workspace
+    networks:
+      - docgen
+    depends_on:
+      - gotenberg
+    # Tek seferlik istek: argüman olarak isteğinizi verin.
+    # docker compose run --rm agent "..."
+
+networks:
+  docgen:
+    name: docgen

@@ -1,0 +1,17 @@
+# DOCGEN — Python motoru
+# ofis dosyaları: hızlı okuma/yazma (MIT)
+office-oxide>=0.1.15
+# PDF metin/tablo çıkarımı (MIT)
+pdfplumber>=0.11.0
+# XML + ECMA-376 XSD doğrulama (BSD-3)
+lxml>=5.0.0
+# Gotenberg HTTP istekleri (BSD-3)
+requests>=2.31.0
+# hassas xlsx hücre/stil/formül işlemleri (MIT)
+openpyxl>=3.1.0
+# güvenli XML parse (PSF)
+defusedxml>=0.7.0
+# görsel QA eklentisi: PDF -> PNG render (Apache-2.0)
+pypdfium2>=4.30.0
+# görsel QA: contact-sheet / imaj işleme (HPND)
+Pillow>=10.0.0

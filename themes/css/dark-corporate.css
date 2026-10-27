@@ -1,0 +1,33 @@
+/* DOCGEN theme: dark-corporate — A4 print preset (HTML → Gotenberg)
+   Note: dark backgrounds on paper are expensive to print; this preset
+   keeps the dark palette but prints on white for the body text.
+   Use the JSON tokens (dark bg) for PPTX/HTML screens instead. */
+@page { size: A4; margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: Calibri, "Segoe UI", Arial, sans-serif;
+       font-size: 10.5pt; line-height: 1.5; color: #1A1A1A; }
+
+h1 { color: #0F1B2D; font-size: 20pt; margin: 0 0 12pt; }
+h1 .accent, h2 { color: #0F1B2D; }
+h2 { font-size: 13pt; margin: 16pt 0 6pt; page-break-after: avoid; }
+h3 { color: #1E3A5F; font-size: 11pt; margin: 12pt 0 4pt; page-break-after: avoid; }
+p  { margin: 0 0 8pt; text-align: justify; }
+ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+li { margin-bottom: 3pt; }
+a  { color: #1E3A5F; }
+
+table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; page-break-inside: auto; }
+tr  { page-break-inside: avoid; }
+th, td { border: 1px solid #BFBFBF; padding: 4pt 6pt; font-size: 9.5pt; vertical-align: top; }
+th { background: #0F1B2D; color: #FFFFFF; text-align: left; }
+tbody tr:nth-child(even) { background: #EEF3F9; }
+thead { display: table-header-group; }
+
+.subtitle { color: #595959; font-size: 11pt; margin-bottom: 16pt; }
+.callout { background: #EEF3F9; border-left: 3pt solid #0F1B2D;
+           padding: 8pt 10pt; margin: 10pt 0; page-break-inside: avoid; }
+img  { max-width: 100%; }
+.page-break { page-break-before: always; }
+.avoid-break { page-break-inside: avoid; }
+footer, .page-footer { color: #595959; font-size: 8pt; }

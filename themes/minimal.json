@@ -1,0 +1,26 @@
+{
+  "name": "minimal",
+  "label": "Minimal siyah-beyaz",
+  "colors": {
+    "primary": "#111111",
+    "secondary": "#444444",
+    "accent": "#E8E8E8",
+    "background": "#FFFFFF",
+    "text": "#111111",
+    "muted": "#777777"
+  },
+  "fonts": {
+    "heading": "Calibri",
+    "body": "Calibri"
+  },
+  "spacing": {
+    "slide_title_size_pt": 30,
+    "slide_body_size_pt": 17,
+    "line_spacing_pt": 26
+  },
+  "rules": {
+    "max_bullets_per_slide": 5,
+    "max_fonts": 2,
+    "accent_lines_under_titles": false
+  }
+}

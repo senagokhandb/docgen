@@ -1,0 +1,26 @@
+{
+  "name": "professional-blue",
+  "label": "Kurumsal Mavi (varsayılan)",
+  "colors": {
+    "primary": "#1F4E79",
+    "secondary": "#2E75B6",
+    "accent": "#BDD7EE",
+    "background": "#FFFFFF",
+    "text": "#1A1A1A",
+    "muted": "#595959"
+  },
+  "fonts": {
+    "heading": "Calibri",
+    "body": "Calibri"
+  },
+  "spacing": {
+    "slide_title_size_pt": 32,
+    "slide_body_size_pt": 18,
+    "line_spacing_pt": 28
+  },
+  "rules": {
+    "max_bullets_per_slide": 6,
+    "max_fonts": 2,
+    "accent_lines_under_titles": false
+  }
+}
