@@ -1,6 +1,6 @@
 ---
 name: pptx
-description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pitch materials, slide-based output, or to modify an existing .pptx.
+description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pitch materials, slide-based output, to modify an existing .pptx, or to build a deck on a user's template (.potx/.pptx).
 ---
 
 # PPTX skill
@@ -9,16 +9,21 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
 
 | Need | Tool |
 |---|---|
-| New deck, text + bullets, theme applied automatically | `node /opt/docgen/scripts/build_themed_deck.js <theme.json> <content.json> <out.pptx>` (QUICK — recommended for plain decks) |
-| New deck, full control (charts, images, custom layouts) | Node `pptxgenjs` script in `/workspace/scratch/` (PRIMARY for anything custom) |
-| New deck, quick/text-only | Python `office_oxide.PptxWriter` |
-| Read any deck's text | Python `office_oxide.Document.open(p).to_markdown()` |
-| Text-only edit on existing deck | unzip → edit `ppt/slides/slideN.xml` (`a:t` elements) with `lxml` → rezip |
-| Style edit on existing deck (color, font, size, position) | unzip → edit `a:rPr` / `a:xfrm` in `ppt/slides/slideN.xml` with `lxml` → rezip |
+| Read a deck (text / formatting, positions) | `readback.py <file>` / `readback.py <file> --format` |
+| Where does a text occur? | `find_target.py <file> "<text>" [--slide N]` |
+| **Edit an uploaded deck** (text, formatting, position/size, fill, background, notes, tables, slide delete/move/duplicate/hide) | Python `docgen.pptx` + `docgen.package.Package` (REFERENCE.md §docgen.pptx) |
+| Theme colors / fonts of a deck | `docgen.theme.set_color` / `set_fonts` |
+| New deck, text + bullets, theme applied automatically | `node /opt/docgen/scripts/build_themed_deck.js <theme.json> <content.json> <out.pptx>` |
+| New deck, full control (charts, images, custom layouts) | Node `pptxgenjs` script in `/workspace/scratch/` |
+| New deck on a **user template** | `docgen.pptx.start_from_template` + python-pptx layouts |
+| .ppt / .odp input | `convert_legacy.py` first, then edit the .pptx |
 | Render check (page count, content) | Gotenberg `/forms/libreoffice/convert` (pptx→PDF) + `pdfplumber` |
-| Validation | `python /opt/docgen/scripts/validate.py <file>` |
+| Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
-## Theme workflow (required for new decks)
+pptxgenjs and office_oxide cannot open an existing deck: never "edit" an
+uploaded deck by rebuilding it with them.
+
+## Theme workflow (required for new decks without a user template)
 
 1. Pick the theme: `/opt/docgen/themes/{professional-blue,minimal,dark-corporate}.json`.
    User's choice wins; otherwise default to `professional-blue` and say so.
@@ -67,7 +72,7 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
    ```
    then validate → readback → Gotenberg render (page count == slide count).
 
-Use a custom `pptxgenjs` script instead whenever the deck needs charts,
+Use a custom `pptxgenjs` script (new decks only) whenever the deck needs charts,
 images, tables, or non-standard layouts, or the user asks for specific
 colors, fonts, sizes or positions (the builder only applies theme tokens).
 In pptxgenjs every `addText` takes `x`, `y`, `w`, `h` (inches), `color`
@@ -116,40 +121,73 @@ of a line in a non-placeholder text box, pass a run array:
 4. QA loop: validate.py → readback.py → Gotenberg render + `pdfplumber`
    page-count check.
 
-## Editing workflow (existing deck)
+## Editing workflow (uploaded deck)
 
-1. Read: `Document.open(path).to_markdown()` — map slides to content.
-2. **Text-only changes:**
-   - `unzip -o deck.pptx -d /workspace/scratch/deck_x`
-   - edit `ppt/slides/slideN.xml` with `lxml`; text lives in `a:t`
-     elements inside `a:p` paragraphs (namespace `a` =
-     `http://schemas.openxmlformats.org/drawingml/2006/main`).
-   - rezip: `cd /workspace/scratch/deck_x && zip -r ../new.pptx . -x ".*"`
-3. **Targeted style changes** ("bu başlığı kırmızı yap", "3. slayttaki
-   metin 20 punto olsun", "logoyu sağa al"): same unzip/rezip as step 2,
-   but change only the matching shape/runs — do NOT rebuild the deck.
-   - Find the `p:sp` whose `a:t` text matches; edit each `a:r/a:rPr`
-     (create it as the run's first child if missing):
-     - size: attribute `sz` in 1/100 pt (`sz="2000"` = 20 pt)
-     - color: child `<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>`
-       (replace any existing fill child)
-     - font: child `<a:latin typeface="Arial"/>`
-     - bold/italic: attributes `b="1"` / `i="1"`
-     - child order inside `a:rPr`: `a:ln`, fill, effects, `a:highlight`,
-       then `a:latin`, `a:ea`, `a:cs` — fill always before `a:latin`.
-   - Alignment: `algn="ctr"|"l"|"r"` on that paragraph's `a:pPr`.
-   - Position/size: `p:spPr/a:xfrm` → `a:off x= y=` and `a:ext cx= cy=`
-     in EMU (914400 EMU = 1 inch). If the shape has no `a:xfrm` it inherits
-     from the layout — add one as the first child of `p:spPr`.
-   - If the target is only part of a run, split the run (copy its `a:rPr`)
-     and style only the target part.
-   - An XSD order mistake shows up in `validate.py` as "This element is not
-     expected" — fix the order and re-run.
-4. **Layout/theme/structural changes:** regenerating is more reliable than
-   patching — extract the deck's text content, then rebuild the deck with
-   pptxgenjs using the theme. Do this when many slides change or the user
-   asks for a restyle.
-5. QA: validate → readback → render.
+Never rebuild an uploaded deck; change only what was asked. Charts,
+SmartArt, images, hidden slides, links and notes must survive untouched.
+
+1. `readback.py <file> --format` to map slides/shapes; `find_target.py` for
+   the target. Use the user's context (slide number/title, title vs body,
+   table row). Still several matches → report candidates, write no file.
+2. Write `/workspace/scratch/edit.py` with the helpers:
+   ```python
+   from docgen.package import Package
+   from docgen import pptx as P, one
+   pkg = Package("/workspace/uploads/sunum.pptx")
+
+   sl = P.slide(pkg, title="Sonuç")                       # or P.slide(pkg, 6)
+   P.replace(one(P.find(pkg, "Büyüme sürüyor", slide=sl.index), "madde"), "Büyüme 2026'da da sürecek")
+
+   sh = one(P.find_shapes(pkg, slide=2, text="Kaynak: İç analiz"), "kutu")
+   P.set_run_props(P.runs_of(sh), size=10, italic=True)          # bold/underline/strike/color/font too
+   m = one(P.find(pkg, "risk", slide=1, in_title=False, whole_word=True), "risk")
+   P.set_run_props(P.split_runs(m), underline=True)              # only that word
+
+   W, H = P.slide_size(pkg); x, y, w, h = sh.xfrm
+   P.set_geometry(sh, x=W - w - P.cm(1), y=P.cm(1))              # move / resize (EMU; cm(), inch())
+   pkg.save("/workspace/outputs/sunum-duzenlenmis.pptx")
+   ```
+   More: `set_paragraph_props(P.paragraphs_of(sh), align="right")`,
+   `scale(pic, 0.5)`, `set_fill(sh, "FF8800")`, `set_background(sl, "EDEDED")`
+   (one slide only), `set_notes(pkg, 3, text)`, tables (`tables`, `table_rows`,
+   `set_cell_text`, `cell` + `set_run_props`/`set_paragraph_props`,
+   `set_cell_fill`, `add_column`), slides (`delete_slide`, `move_slide`,
+   `duplicate_slide`, `set_hidden`), theme (`docgen.theme.set_color(pkg, "accent1", "800020")`).
+   - `P.replace` changes ONE occurrence; for "everywhere" loop over
+     `P.find(...)` and report the count.
+   - `delete_slide` refuses (`NeedsConfirmation`) when another slide links
+     to it — needs `--onay`.
+3. Verify:
+   ```bash
+   python /opt/docgen/scripts/validate.py OUT --baseline SRC
+   python /opt/docgen/scripts/diff_check.py SRC OUT --allow-slide 2 --format-only \
+          --record /workspace/outputs/manifest.json
+   python /opt/docgen/scripts/readback.py OUT --format
+   ```
+   Scope flags: `--allow-slide N`, `--allow-notes N`, `--allow-text T`,
+   `--allow-structure` (slide add/delete/move), `--allow-theme`;
+   `--text-only` / `--format-only`.
+
+## User template (.potx / .pptx given as template)
+
+The template's masters, layouts, theme and fonts define the look; docgen
+themes and `build_themed_deck.js` do NOT apply.
+
+```python
+from docgen.pptx import start_from_template
+from pptx import Presentation                      # python-pptx
+out = "/workspace/outputs/sunum.pptx"
+start_from_template("/workspace/uploads/kurumsal.potx", out)   # example slides removed
+prs = Presentation(out)
+print([l.name for l in prs.slide_layouts])         # pick layouts by name
+s = prs.slides.add_slide(next(l for l in prs.slide_layouts if l.name == "Title and Content"))
+s.shapes.title.text = "Pazar görünümü"
+s.placeholders[1].text_frame.text = "Talep büyüyor"
+prs.save(out)
+```
+Keep the template's example slides instead (`keep_slides=True`) when the user
+wants to fill them; then edit them with `docgen.pptx` as above. Verify with
+`validate.py out --baseline <template>` and a render.
 
 ## Quality rules
 

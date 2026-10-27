@@ -20,7 +20,7 @@ kullanıcı istegi ──> docker compose ──> agent (Qwen Code, non-root san
 | Servis | Görüntü | Görevi |
 |---|---|---|
 | **agent** | `docgen-agent:latest` (Dockerfile ile derlenir) | Belge üretim ajanı: Qwen Code CLI, Python/Node motorları, skills, doğrulama scriptleri, temalar, şablonlar, XSD şemaları. Non-root `agent` (uid 1000) kullanıcı olarak çalışır. |
-| **gotenberg** | `gotenberg/gotenberg:8` | Render ve PDF motoru: Chromium (HTML→PDF), LibreOffice (ofis→PDF), pdfengines (merge/crop). Host portu açılmaz; yalnızca iç ağdan erişilir. |
+| **gotenberg** | `gotenberg/gotenberg:8` | Render ve PDF motoru: Chromium (HTML→PDF), LibreOffice (ofis→PDF), pdfengines (merge/split/watermark/stamp/rotate). Host portu açılmaz; yalnızca iç ağdan erişilir. |
 
 ### 1.2 Agent konteynerinin içindekileri
 
@@ -28,16 +28,19 @@ kullanıcı istegi ──> docker compose ──> agent (Qwen Code, non-root san
 |---|---|
 | **Ajan çekirdeği** | Qwen Code CLI v0.26.1 — istemi headless modda (`--yolo -o json`) çalıştırır; kod yazma, shell komutu, dosya okuma/yazma yetkileri tam |
 | **Model** | `.env` dosyasındaki OpenAI-uyumlu endpoint (Gemma). Konteyner dışı, kendi inference servisiniz |
-| **Python motoru** | office_oxide (ofis okuma/yazma/düzenleme), pdfplumber, lxml, openpyxl, requests, defusedxml, pypdfium2, Pillow |
-| **Node motoru** | docx-js (docx), pptxgenjs — `NODE_PATH=/opt/docgen/node_modules` |
+| **docgen kütüphanesi** | `/opt/docgen/lib/docgen` (`PYTHONPATH`) — yüklenen dosyayı **yerinde** düzenlemek için test edilmiş yapı taşları: `package`, `docx`, `pptx`, `xlsx`, `xlsx_struct`, `pdf`, `theme`, `compare`, `office`. Agent kendi script'inden çağırır. |
+| **Python motoru** | office_oxide (hızlı okuma, yeni dosya), python-docx / python-pptx (kullanıcı şablonundan üretim), openpyxl (yeni çalışma kitabı), pdfplumber, pypdfium2 (PDF sayfa + metin düzenleme), lxml, requests, defusedxml, Pillow |
+| **LibreOffice (headless)** | yalnızca hesap motoru ve dönüştürücü: formül sonuçlarının hesaplanması (`xlsx_recalc.py`), `.doc/.xls/.ppt` dönüşümü (`convert_legacy.py`) |
+| **Fontlar** | Gotenberg ile aynı aileler (Caladea, Carlito, Liberation, DejaVu) — PDF metni aynı fontla yeniden çizilebilsin diye |
+| **Node motoru** | docx-js (docx), pptxgenjs — yeni dosya üretimi; `NODE_PATH=/opt/docgen/node_modules` |
 | **Bilgi katmanı** | `/opt/docgen/skills/` (4 format skill + referanslar), `/opt/docgen/QWEN.md` (sistem kuralları), `/opt/docgen/themes/` (temalar + CSS + şablonlar), `/opt/docgen/schemas/` (ECMA-376 XSD seti) |
-| **Doğrulama araç seti** | `/opt/docgen/scripts/` — validate, readback, recalc_check, visual_qa, repair_pptx, build_templates, build_themed_deck, pack_skill |
+| **Doğrulama araç seti** | `/opt/docgen/scripts/` — validate (`--baseline`), diff_check, find_target, readback (`--format`), xlsx_recalc, xlsx_struct, pdf_text, pdf_pages, convert_legacy, recalc_check, visual_qa, repair_pptx, build_templates, build_themed_deck, pack_skill |
 
 ### 1.3 Dosya modeli (sandbox kuralları)
 
 | Yol | Erişim |
 |---|---|
-| `/workspace/uploads/` (host: `data/uploads/`) | salt okunur — kullanıcı kaynakları |
+| `/workspace/uploads/` (host: `data/uploads/`) | salt okunur — kullanıcı kaynakları (compose'da `:ro` mount; orijinal her zaman korunur, "geri al" = orijinal) |
 | `/workspace/scratch/` (host: `data/scratch/`) | okuma/yazma — ara dosyalar, scriptler |
 | `/workspace/outputs/` (host: `data/outputs/`) | **teslimatlar yalnızca burada** |
 | `/opt/docgen/` | salt okunur — sistem |
@@ -57,16 +60,18 @@ Konteyner her istekte tek seferlik çalışır (`docker compose run --rm agent`)
    - qwen "$REQUEST" --model $MODEL_NAME --openai-base-url $MODEL_ENDPOINT --yolo -o json
 3. Ajan (QWEN.md kuralları)
    a. İlgili format skill'ini ÖNCE OKUR (zorunlu)
-   b. Tema seçer (kullanıcı belirtmediyse professional-blue, bunu bildirir)
-   c. Motoru seçer (skill'deki tabloya göre) ve kodu /workspace/scratch/ yazar
-   d. Dosyayı üretir
-   e. DOĞRULAMA DÖNGÜSÜ:
-        validate.py  -> yapısal + ECMA-376 XSD
-        readback.py  -> üretilen dosyanın içeriğini geri oku
-        Gotenberg    -> PDF render (sayfa/slayt sayısı kontrolü)
-        recalc_check.py -> YALNIZCA formüllü xlsx (yeniden hesap + beklenen değerler)
+   b. YENİ belge: tema (ya da kullanıcı şablonu) seçer, motoru seçer, kodu yazar, üretir
+      YÜKLENEN belge: find_target.py ile hedefi bulur (birden çok aday -> dosya yazmaz,
+      adayları raporlar), docgen kütüphanesiyle YERİNDE düzenler (baştan üretmez)
+   c. DOĞRULAMA DÖNGÜSÜ:
+        validate.py [--baseline orijinal] -> yapısal + ECMA-376 XSD (yalnızca YENİ hatalar)
+        diff_check.py orijinal sonuç --allow-...  -> istenen dışında bir şey değiştiyse FAIL
+        xlsx_recalc.py -> formül sonuçlarını LibreOffice ile hesaplayıp dosyaya yazar
+        readback.py [--format] -> içerik / biçim geri okuma
+        Gotenberg -> PDF render
       Başarısız adım: düzelt + tekrar (maks. 3 tur, sonra dürüst rapor)
-   f. Son dosyayı /workspace/outputs/ koyar; yol + 2-3 cümle özetle raporlar
+   d. Son dosyayı /workspace/outputs/ koyar; neyin değiştiğini ve neyin
+      yapılamadığını (nedeniyle) raporlar; outputs/manifest.json'a kayıt düşer
 ```
 
 Görsel QA **varsayılan olarak kapalıdır**; istekte `--visual-qa` varsa
@@ -79,22 +84,28 @@ Görsel QA **varsayılan olarak kapalıdır**; istekte `--visual-qa` varsa
 | İhtiyaç | Araç | Dil |
 |---|---|---|
 | Ofis dosyası okuma (markdown/HTML/düz metin) | office_oxide `Document` | Python |
-| Markdown'dan DOCX/PPTX/XLSX (hızlı yol) | office_oxide `create_from_markdown` | Python |
+| **Yüklenen DOCX/PPTX/XLSX'i yerinde düzenleme** (metin, biçim, konum, tablo, bölüm, slayt, stil, tema) | docgen kütüphanesi (`docgen.docx/pptx/xlsx/theme`) | Python |
+| XLSX satır/sütun ekle-sil, sıralama (referanslar her yerde kayar) | `docgen.xlsx_struct` / `xlsx_struct.py` | Python |
+| XLSX formül sonuçlarını hesaplayıp dosyaya yazma | `xlsx_recalc.py` (LibreOffice hesap motoru) | Python |
+| PDF metin (cümle, tablo hücresi, üst/alt bilgi) ve sayfa düzenleme | `docgen.pdf` / `pdf_text.py`, `pdf_pages.py` (pypdfium2) | Python |
+| Kullanıcı şablonundan yeni belge/deste | `start_from_template` + python-docx / python-pptx | Python |
+| `.doc/.xls/.ppt` → OOXML | `convert_legacy.py` (LibreOffice) | Python |
+| Markdown'dan DOCX/PPTX/XLSX (hızlı yol, yeni dosya) | office_oxide `create_from_markdown` | Python |
 | XLSX üretimi: hücre, formül, birleştirme, stil (yalnız kalın + arka plan) | office_oxide `XlsxWriter` | Python |
-| PPTX üretimi (basit/sadece metin, stilsiz) | office_oxide `PptxWriter` | Python |
-| Mevcut ofis dosyasında metin/hücre değeri düzenleme (stil yok) | office_oxide `EditableDocument` | Python |
-| Hassas xlsx hücre/stil/formül (font rengi/adı/punto, dolgu, hizalama) | openpyxl | Python |
-| DOCX tam kontrol (tarz, başlık/altlık, tablo, run/paragraf/hücre stili) | docx (docx-js) | Node |
-| PPTX tam kontrol (şema, grafik, görsel, metin/şekil stili ve konumu) | pptxgenjs | Node |
-| Mevcut DOCX/PPTX'te eleman bazlı stil (renk, font, punto, konum) | lxml ile XML yaması | Python |
+| Yeni XLSX: tam stil, grafik, doğrulama | openpyxl (yalnız yeni dosya; yüklenen dosyayı kaydederken formül sonuçlarını siler) | Python |
+| DOCX tam kontrol (yeni dosya) | docx (docx-js) | Node |
+| PPTX tam kontrol (yeni dosya) | pptxgenjs | Node |
 | PDF metin/tablo çıkarma (QA geri-okuma) | pdfplumber | Python |
 | XML parse + XSD doğrulama | lxml | Python |
-| Güvenli XML parse | defusedxml | Python |
 | PDF→PNG render (görsel QA) | pypdfium2 + Pillow | Python |
 | HTTP istemcisi (Gotenberg) | requests | Python |
 | HTML→PDF | Gotenberg Chromium | servis |
-| Ofis→PDF, xlsx yeniden hesap | Gotenberg LibreOffice | servis |
-| PDF merge/crop/sayfa seçimi | Gotenberg pdfengines | servis |
+| Ofis→PDF | Gotenberg LibreOffice | servis |
+| PDF merge / watermark / stamp / rotate | Gotenberg pdfengines (`crop` diye bir rota yoktur) | servis |
+
+`office_oxide.EditableDocument.replace_text` hedefli düzenleme için
+kullanılmaz: her geçişi (kelime içindekiler dahil: "risk" → "riski")
+değiştirir ve run sınırını aşan metinde biçimi yayar.
 
 Tüm bağımlılıklar açık kaynak (MIT / BSD / Apache-2.0 / HPND / PSF);
 lisanslar `requirements.txt` ve `package.json` içinde satır satır belirtilir.
@@ -106,21 +117,44 @@ Agent hazır script'lerle sınırlı değildir: her istek için kendi kodunu
 yap" gibi bir istek doğrudan koda çevrilir ve yalnızca istenen
 paragraf / run / hücre / slayt / şekil üzerinde uygulanır.
 
-| Format | Yeni dosya | Mevcut dosya | Kontrol edilenler |
+| Format | Yeni dosya | Yüklenen dosya (yerinde) | Kontrol edilenler |
 |---|---|---|---|
-| DOCX | docx-js `TextRun`, `Paragraph`, `TableCell` | lxml: `w:rPr`, `w:pPr`, `w:tcPr` | renk, font, punto, kalın/italik, hizalama, hücre dolgusu |
-| PPTX | pptxgenjs `addText` (`x/y/w/h`, run dizileri) | lxml: `a:rPr`, `a:pPr`, `a:xfrm` | renk, font, punto, hizalama, konum ve boyut |
-| XLSX | openpyxl `Font`, `PatternFill`, `Alignment` | openpyxl `load_workbook` | hücre/aralık bazında renk, font, punto, dolgu, hizalama |
-| PDF | HTML + eleman bazlı CSS → Gotenberg | HTML'den yeniden üretim | CSS'in her şeyi |
+| DOCX | docx-js `TextRun`, `Paragraph`, `TableCell` | `docgen.docx`: `set_run_props`, `set_paragraph_props`, `set_style_props`, `set_cell_shading` | renk, font, punto, kalın/italik/altı/üstü çizili, vurgu, hizalama, satır aralığı, girinti, hücre dolgusu; tek ifade / paragraf / stil (tüm başlıklar) kapsamında |
+| PPTX | pptxgenjs `addText` (`x/y/w/h`, run dizileri) | `docgen.pptx`: `set_run_props`, `set_paragraph_props`, `set_geometry`, `scale`, `set_fill`, `set_background` | renk, font, punto, hizalama, **konum ve boyut**, dolgu, tek slayt arka planı, tablo hücresi |
+| XLSX | openpyxl `Font`, `PatternFill`, `Alignment` | `docgen.xlsx`: `set_style`, `add_conditional_format`, `set_column_width` | font rengi/adı/punto, kalın/italik/altı çizili, dolgu, sayı biçimi, hizalama, kalıcı koşullu biçim |
+| PDF | HTML + eleman bazlı CSS → Gotenberg | yalnız metin içeriği (`pdf_text.py`) | mevcut PDF metninin renk/font değişimi desteklenmez (kaynak dosya düzenlenir) |
 
 - **office_oxide stil motoru değildir:** `XlsxWriter` yalnız kalın + arka
   plan rengi verebilir; `PptxWriter` ve `EditableDocument` stil ayarlayamaz.
-  Stil istekleri yukarıdaki motorlara gider.
-- Mevcut dosyada tek bir stil değişikliği için dosya baştan üretilmez;
-  yalnızca ilgili eleman yamalanır. XML sırası hatalıysa `validate.py`
-  ("This element is not expected") yakalar, agent düzeltip tekrar dener.
-- Format bazlı adımlar skill dosyalarındadır (`skills/*/SKILL.md` ›
-  *Targeted style changes*).
+- Yardımcılar özellikleri şema sırasıyla yazar, run'ı tam karakter
+  sınırından böler ve stil kalıtımını hesaba katar (stilden gelen kalınlığı
+  kaldırmak için açıkça "kapalı" yazar).
+
+### 3.2 Yüklenen dosyayı yerinde düzenleme (yetenek ve korumalar)
+
+Yüklenen belge baştan üretilmez; yalnızca istenen eleman değişir. Aşağıdaki
+yetenekler kabul testi listesindeki gerçek fixture'larla (Word/LibreOffice
+ile üretilmiş belgeler) denenmiş ve `diff_check` + `validate --baseline`
+ile doğrulanmıştır.
+
+| Format | Yerinde yapılabilenler | Değişen paket parçası (örnek) |
+|---|---|---|
+| DOCX | tek ifade/geçiş değiştirme (bölüm/başlık bağlamıyla), run/paragraf/stil biçimi, tablo hücresi, satır ve **sütun** ekleme/silme, paragraf ekleme, bölüm silme, tema renkleri, şablondan yeni belge | yalnız `word/document.xml` (stil kapsamında `styles.xml`, tema için `theme1.xml`) |
+| PPTX | madde/metin, run biçimi, **konum/boyut**, resim ölçekleme, dolgu, tek slayt arka planı, konuşmacı notu, tablo hücresi/biçimi/sütun ekleme, slayt silme/taşıma/çoğaltma/gizleme, tema rengi, şablondan yeni deste | yalnız ilgili `slideN.xml` / `notesSlideN.xml` (yapısal işlemlerde `presentation.xml` + ilişkiler) |
+| XLSX | değer/formül (stil korunur), hücre biçimi, sayı biçimi, koşullu biçim, sütun genişliği, **satır/sütun ekleme-silme ve sıralama** (formüller, adlar, CF/DV, tablo, grafik serileri, çizim çapaları birlikte kayar), formül sonuçlarının yeniden hesaplanıp yazılması, `.xltx` şablon doldurma | yalnız ilgili sayfa(lar), `styles.xml`, tablo tanımı |
+| PDF | cümle/paragraf metni (aynı font ailesi, sütun içinde satır kaydırma), tablo hücresi, üst/alt bilgi metni, sayfa silme/taşıma/ekleme/döndürme, "Sayfa n / N" yeniden numaralandırma | yalnız ilgili sayfa |
+
+Korumalar (yardımcılar zorunlu kılar, agent atlayamaz):
+- **Belirsiz hedef** (`Ambiguous`): ör. iki ayrı "Sonuç" başlığı → dosya
+  yazılmaz, adaylar başlık yoluyla raporlanır.
+- **Yıkıcı işlem** (`NeedsConfirmation`): formülün üzerine yazma, başka
+  hücrelerin okuduğu satırı silme, başka slaytın köprü verdiği slaytı silme,
+  formülü değere çevirme → yalnızca istekte `--onay` varsa.
+- **Yanlış "eski değer"** (`ValueMismatch`): dosyadaki gerçek değer raporlanır.
+- **Yapılamayan** (`NotSupported`): PDF metninin rengi/fontu, sığmayan PDF
+  metni, birleşik hücreli tabloda sütun ekleme, pivot tablolu sayfada satır
+  işlemi vb. — daha geniş bir değişiklikle ikame edilmez.
+- **"Hiçbir şeye dokunma"** isteği: dosya bayt bayt aynı teslim edilir.
 
 ---
 
@@ -134,10 +168,10 @@ kuralını zorunlu kılar.
 
 | Skill | Kapsam | Öne çıkanlar |
 |---|---|---|
-| `docx` | DOCX üret/düzenle | hızlı yol (markdown→docx), tam kontrol (docx-js), unzip→lxml→rezip düzenleme, hata modu tablosu |
-| `pptx` | PPTX üret/düzenle | zorunlu tema akışı, anti-AI tasarım kuralları, `build_themed_deck.js` hızlı üretici, pptxgenjs tam kontrol, "yeniden üret > yama" kuralı |
-| `xlsx` | XLSX üret/düzenle | formül kuralları (desteklenmeyen işlevler + `_xlfn.` listesi), finans renk konvansiyonu, XlsxWriter API tuzakları (0 tabanlı satır/sütun, formülde "="), yeniden hesap QA'sı |
-| `pdf` | PDF üret/işle | HTML-öncelikli üretim (temalı CSS preset), pdfengines işlemleri, "kaynak dosyayı bul" kuralı, taramalı PDF→Docling notu |
+| `docx` | DOCX üret/düzenle/şablon | hızlı yol (markdown→docx), tam kontrol (docx-js), `docgen.docx` ile yerinde düzenleme (kapsam kuralları: ifade/paragraf/stil), kullanıcı şablonu (.dotx) akışı, hata modu tablosu |
+| `pptx` | PPTX üret/düzenle/şablon | tema akışı (şablon yoksa), anti-AI tasarım kuralları, `build_themed_deck.js`, pptxgenjs, `docgen.pptx` ile yerinde düzenleme (konum/boyut, notlar, slayt işlemleri), kullanıcı şablonu (.potx) akışı |
+| `xlsx` | XLSX üret/düzenle/şablon | formül kuralları, finans renk konvansiyonu (yeni dosyalar), `docgen.xlsx` ile yerinde düzenleme, `xlsx_struct.py` yapısal işlemler, `xlsx_recalc.py` zorunlu yeniden hesap, .xltx doldurma |
+| `pdf` | PDF üret/işle/düzenle | HTML-öncelikli üretim, `pdf_text.py` / `pdf_pages.py` ile yerinde düzenleme, doğrulanmış Gotenberg rotaları, dürüst ret kuralları, taramalı PDF notu |
 
 Her skill `pack_skill.py` ile taşınabilir `.skill` (zip) paketine çevrilebilir
 (`skills/*.skill` — 4 paket üretildi).
@@ -154,27 +188,83 @@ Her skill `pack_skill.py` ile taşınabilir `.skill` (zip) paketine çevrilebili
 - PDF: `%PDF` başlığı + sayfa sayısı.
 - Çıktı: insan-okunur veya `--json`; exit 0=geçti, 1=başarısız, 2=kullanım hatası.
 - Yapısal hata varsa XSD adımı atlanır (sahte geçiş engellenir).
+- `mc:Ignorable` uzantıları (w14/w15…) ve `mc:AlternateContent` doğrulamadan
+  önce standart geri dönüşlerine indirgenir.
+- **`--baseline <orijinal>`**: düzenlenen ya da şablondan üretilen dosyada
+  yalnızca **yeni** şema bulguları hata sayılır. (Word'ün kendi yazdığı bazı
+  yapılar — ör. `w:percent`'siz `w:zoom` — 1. baskı şemasına uymaz; bunlar
+  "pre-existing" olarak listelenir.) `.dotx/.potx/.xltx` ve makrolu uzantılar
+  da kabul edilir.
 
-### 5.2 readback.py — içerik geri okuma
-Üretilen dosyayı office_oxide (ofis) veya pdfplumber (PDF) ile geri okur;
-ajan "niyet ettiğim içerik gerçekten dosyada mı?" sorusunu yanıtlar.
-`--tables` (xlsx/pdf tablo özeti), `--max-chars`.
+### 5.2 diff_check.py — "yalnızca istenen değişti mi?" (düzenlemelerde zorunlu)
+Orijinal ile sonucu içerik düzeyinde karşılaştırır; ajanın bildirdiği
+kapsam dışındaki her değişiklikte FAIL verir.
+- DOCX: paragraf metni, karakter düzeyinde biçim (biçim "taşması" dahil),
+  paragraf biçimi, resimler, stiller, tablolar, sayfa yapısı.
+- PPTX: şekil metni/biçimi/konum-boyutu/dolgusu, notlar, arka plan, gizlilik,
+  slayt sırası, eklenen/silinen slaytlar.
+- XLSX: değer/formül, hesaplanmış sonuç (sayısal tolerans), görsel olarak
+  çözümlenmiş hücre biçimi (tema rengi/fontu değerlere çevrilir), koşullu
+  biçim, doğrulama, birleşik hücreler, sütun genişlikleri, tablolar, adlar,
+  grafikler, çizimler, dış bağlantılar.
+- PDF: sayfa eşleme (silinen/eklenen/taşınan), satır metni, font, punto,
+  renk, konum; üst/alt bilgi bandı ayrı.
+- Paket düzeyi: kapsam dışı parça değişikliği ve ZIP klasör kayıtları.
+- Kapsam: `--allow-text/-section/-style/-slide/-notes/-page/-band/-cell/
+  -sheet/-recalc/-feature/-structure/-theme/-part`, `--text-only`,
+  `--format-only`; beklenti: `--expect-text`, `--expect-gone`;
+  `--record outputs/manifest.json` (orijinal/sonuç SHA-256 + değişiklikler).
 
-### 5.3 recalc_check.py — formül QA'sı (xlsx)
-Dosyayı Gotenberg'in LibreOffice'u üzerinden PDF'e çevirir (LibreOffice
-formülleri yüklemeyi yeniden hesaplar), pdfplumber ile metni tarar:
-- Hata tokenları: `#REF! #NAME? #DIV/0! #VALUE! #N/A #NULL! #NUM!`
-- `--expect "Etiket:değer"` (tekrarlanabilir): beklenen hesaplanan değerler
-  render edilmiş sayfada aranır (boşluk/virgül normalizasyonu ile).
-- Exit 0/1/2 + `--json` rapor.
+### 5.3 find_target.py — hedef bulma
+Bir metnin tüm geçişlerini bağlamıyla listeler (DOCX başlık yolu ve tablo
+hücresi, PPTX slayt/şekil, XLSX hücre, PDF sayfa/satır). Exit 0 = tek
+eşleşme, 3 = birden fazla (belirsiz), 1 = yok.
 
-### 5.4 visual_qa.py — görsel QA eklentisi (varsayılan: KAPALI)
+### 5.4 readback.py — içerik geri okuma
+Üretilen dosyayı office_oxide (ofis) veya pdfplumber (PDF) ile geri okur.
+`--format`: run/paragraf biçimi, şekil konumu, hücre biçimi, PDF satır
+font/punto/renk/konumu — biçim değişikliklerini okuyarak doğrulamak için.
+`--tables`, `--max-chars`; `.dotx/.potx/.xltx` da okunur.
+
+### 5.5 xlsx_recalc.py — formül sonuçları
+LibreOffice'i yalnızca hesap motoru olarak kullanır: kopyayı hesaplatır,
+sonuçları **orijinal paketin** formül hücrelerine önbellek değeri olarak
+yazar (başka hiçbir parça değişmez). Yeni `#REF!/#DIV/0!…` hatalarında ve
+`--expect "Sayfa!B4=20000"` tutmadığında exit 1. (`recalc_check.py`,
+LibreOffice yoksa Gotenberg üzerinden tarama yapan eski yedek yoldur.)
+
+### 5.6 xlsx_struct.py — satır/sütun ve sıralama
+`insert-rows/delete-rows/insert-cols/delete-cols/sort` sayfa XML'inde yerinde
+yapılır; sayfaya giden tüm referanslar Excel kuralıyla kaydırılır (tüm
+sayfalardaki formüller, adlar/yazdırma başlıkları, CF/DV aralık ve
+formülleri, tablolar, birleşik hücreler, köprüler, yorumlar, çizim
+çapaları, grafik serileri). Okunan satırı silme `--onay` ister; ardından
+`xlsx_recalc.py` otomatik çalışır.
+
+### 5.7 pdf_text.py / pdf_pages.py — PDF düzenleme
+`pdf_text.py`: metni yerinde değiştirir — yeni karakterlerin hepsi gömülü
+fontta varsa ve satır sığıyorsa mevcut metin nesnesi; aksi halde paragraf
+aynı font ailesinin tam dosyasıyla sütun içinde yeniden çizilir. Karışık
+biçimli satır, tablo satırının tamamı, kurulu olmayan font ailesi veya
+sığmayan metinde reddeder; sonucu sayfayı geri okuyarak doğrular.
+`pdf_pages.py`: delete/keep/move/insert/rotate + `--renumber`.
+
+### 5.8 convert_legacy.py
+`.doc/.xls/.ppt` (ve `.rtf/.odt/.ods/.odp`) → OOXML; dönüşüm son yanıtta
+belirtilir.
+
+### 5.9 recalc_check.py — eski formül QA'sı (yedek)
+Dosyayı Gotenberg'in LibreOffice'u üzerinden PDF'e çevirip hata
+tokenlarını tarar; değer yazamaz. LibreOffice'in agent imajında olmadığı
+durumlar için tutulur.
+
+### 5.10 visual_qa.py — görsel QA eklentisi (varsayılan: KAPALI)
 PDF'i sayfa sayfa PNG'ye render eder; `--contact-sheet` ile tek ızgara
 görüntüsü, `--docling` ile Docling kuruluysa OCR çapraz kontrolü
 (bos/bozuk sayfa tespiti). İstekte `--visual-qa` gelmediyse çalıştırılmaz —
 Gemma'nın vision yeteneği olmadığı için normal akışa girmez.
 
-### 5.5 Yardımcılar
+### 5.11 Yardımcılar
 - `repair_pptx.py` — pptxgenjs çıktısındaki bilinen iki XML kusurunu
   düzeltir: `presentation.xml` öğe sırası (XSD'ye göre
   `notesMasterIdLst` → `sldIdLst` sıralaması) ve placeholder'da birleşik
@@ -209,6 +299,11 @@ accent_lines_under_titles}`.
 - HTML→PDF için her temanın yazdırılabilir CSS preset'i var
   (`themes/css/*.css`: A4 @page, tablo başlığı tekrarı, page-break kuralları).
 - PPTX için `build_themed_deck.js` token'ları master'a uygular.
+- **Kullanıcı şablonu her docgen temasını ezer:** `.dotx/.docx`,
+  `.potx/.pptx` veya `.xltx/.xlsx` şablon olarak verilirse stilleri,
+  master/düzenleri, teması, üst/alt bilgisi (logo) korunur ve içerik bu
+  şablon üzerine kurulur (`start_from_template` + python-docx/python-pptx;
+  xlsx için şablon kopyası yerinde doldurulur). Doğrulama `--baseline <şablon>`.
 - Agent kuralı: tema token'ları **varsayılandır**; agent kendiliğinden tema
   dışı renk/font üretmez. Tema seçimi final raporda belirtilir.
 - **Kullanıcının açık isteği temayı ezer:** "başlığı kırmızı yap", "bu
@@ -251,13 +346,24 @@ docgen/
 │                               #   tema/anti-AI kuralları, doğrulama döngüsü, Gotenberg)
 ├── entrypoint.sh               # skill kopyalama + Gotenberg health + qwen headless
 ├── data/                       # (bind mount -> /workspace)
-│   ├── uploads/                # kullanıcı kaynakları (salt okunur)
+│   ├── uploads/                # kullanıcı kaynakları (:ro mount)
 │   ├── scratch/                # çalışma alanı
-│   └── outputs/                # TESLİMATLAR
+│   └── outputs/                # TESLİMATLAR (+ manifest.json)
+├── lib/docgen/                 # agent'ın kendi koduyla kullandığı kütüphane
+│   ├── package.py              # OOXML paketi: yalnız değişen parça yazılır
+│   ├── docx.py, pptx.py, xlsx.py, xlsx_struct.py, pdf.py, theme.py
+│   ├── compare.py              # diff_check modelleri
+│   └── office.py               # LibreOffice (hesap/dönüşüm)
 ├── scripts/
-│   ├── validate.py             # yapısal + XSD doğrulama
-│   ├── readback.py             # içerik geri okuma
-│   ├── recalc_check.py         # xlsx formül yeniden-hesap QA'sı
+│   ├── validate.py             # yapısal + XSD doğrulama (--baseline)
+│   ├── diff_check.py           # kapsam dışı değişiklik kontrolü
+│   ├── find_target.py          # hedef bulma (belirsizlik tespiti)
+│   ├── readback.py             # içerik / biçim geri okuma
+│   ├── xlsx_recalc.py          # formül sonuçlarını hesaplayıp yazar
+│   ├── xlsx_struct.py          # satır/sütun/sıralama (referans kaydırma)
+│   ├── pdf_text.py, pdf_pages.py   # PDF metin / sayfa düzenleme
+│   ├── convert_legacy.py       # .doc/.xls/.ppt -> OOXML
+│   ├── recalc_check.py         # eski formül QA'sı (Gotenberg yedeği)
 │   ├── visual_qa.py            # görsel QA eklentisi (varsayılan kapalı)
 │   ├── repair_pptx.py          # pptxgenjs XML kusurlarını düzeltir (idempotent)
 │   ├── build_templates.py      # imaj derleme: docx/pptx baz şablonları
@@ -340,12 +446,22 @@ docker compose run --rm --entrypoint bash agent -c '
 
 ## 11. Güvenlik modeli
 
-- Ajan **non-root** (`agent`, uid 1000) kullanıcı; konteyner dışına yazamaz.
-- `/opt/docgen/` salt okunur kullanım kuralı; uploads salt okunur.
+- Ajan **non-root** (`agent`, uid 1000) kullanıcı; bağlı `data/` dışında
+  hosta yazamaz.
+- `/opt/docgen/` root'a ait, agent için salt okunur (dosya izinleriyle).
+- `uploads/` compose'da ayrıca `:ro` bağlanır: orijinal dosya mount
+  düzeyinde korunur (yalnızca talimata dayanmaz).
 - Konteyner **tek seferlik** (`--rm`): oturum state'i birikmez, her istek
   temiz sandbox'ta başlar.
 - Gotenberg host portu **açılmaz**; yalnızca compose iç ağından erişilir.
 - Model anahtarı yalnızca `.env` (gitignore) içinde; konteynere env olarak
   enjekte edilir, hiçbir dosyaya yazılmaz.
-- XML işlemlerinde defusedxml (XXE koruması); ofis dosyaları zip-bütünlüğü
-  kontrolünden geçer.
+- XML ayrıştırma: docgen kütüphanesi lxml'i `resolve_entities=False,
+  no_network=True` ile kullanır; `validate.py`/`repair_pptx.py` lxml'in
+  varsayılanlarıyla çalışır (lxml ≥ 5 dış entity çözmez). defusedxml kurulu
+  ama şu an hiçbir script tarafından kullanılmıyor. Ofis dosyaları
+  zip-bütünlüğü kontrolünden geçer.
+- Açık kalanlar (bilinçli): agent'ın internet erişimi vardır (model
+  servisine ulaşması gerekir) ve `--yolo` ile komutları onaysız çalıştırır;
+  `MODEL_API_KEY` ortam değişkeni olarak konteynerde görünürdür; CPU/bellek
+  limiti tanımlı değildir.

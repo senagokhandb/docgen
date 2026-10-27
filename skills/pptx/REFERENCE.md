@@ -1,5 +1,50 @@
 # PPTX — technical reference
 
+## docgen.pptx — in-place editing API
+
+```python
+from docgen.package import Package
+from docgen import pptx as P, theme as T, one
+pkg = Package(path)                            # .pptx or .potx
+
+# --- locate (slides are 1-based positions) -------------------------------
+P.slides(pkg)                                  # [Slide] .index .title .hidden .part .notes_part
+P.slide(pkg, 3) / P.slide(pkg, title="Sonuç")
+P.find_shapes(pkg, slide=2, text="Kaynak", name=None, placeholder="title"|"body", kind="sp"|"pic"|"graphicFrame")
+P.find(pkg, "risk", slide=1, whole_word=True, in_title=False)    # text matches (per paragraph)
+sh.xfrm                                        # (x, y, w, h) in EMU or None (inherited)
+
+# --- text / formatting ---------------------------------------------------
+P.replace(match, "yeni")                       # one occurrence, keeps formatting
+P.set_text(shape_or_paragraph, "satır 1\nsatır 2")
+P.set_run_props(P.split_runs(match) or P.runs_of(shape), bold=True, italic=None,
+                underline=True|False, strike=False, color="C00000", size=10, font="Georgia")
+P.set_paragraph_props(P.paragraphs_of(shape), align="left|center|right|justify",
+                      line_spacing=1.2, space_before=6, space_after=6)
+
+# --- geometry / look -----------------------------------------------------
+W, H = P.slide_size(pkg)
+P.set_geometry(shape, x=P.cm(2), y=P.cm(1), w=None, h=None)   # EMU; cm()/inch()/pt()
+P.scale(picture, 0.5)                          # keeps aspect ratio
+P.set_fill(shape, "FF8800")  /  P.set_background(slide, "EDEDED")   # one slide only
+
+# --- notes / tables ------------------------------------------------------
+P.get_notes(pkg, 3); P.set_notes(pkg, 3, "metin")
+t = one(P.tables(pkg, slide=5)); P.table_rows(t)
+P.set_cell_text(t, row, col, "5,3"); tc = P.cell(t, 0, 1); P.set_cell_fill(t, 0, 1, "1F3864")
+P.add_column(t, after=2, values=["2026 Hedef", "", ""])
+
+# --- slides --------------------------------------------------------------
+P.delete_slide(pkg, 6, force=False)            # NeedsConfirmation if another slide links to it
+P.move_slide(pkg, 4, 2); P.duplicate_slide(pkg, 3); P.set_hidden(pkg, 5, True)
+P.incoming_links(pkg, 2)                       # slides that hyperlink to slide 2
+T.set_color(pkg, "accent1", "800020"); T.set_fonts(pkg, major="Georgia")
+
+# --- templates -----------------------------------------------------------
+P.start_from_template(template, dst, keep_slides=False)   # .potx/.pptx -> .pptx, then python-pptx
+pkg.save(dst)
+```
+
 ## office_oxide Python API (verified signatures)
 
 ```python

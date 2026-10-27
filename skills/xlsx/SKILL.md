@@ -1,6 +1,6 @@
 ---
 name: xlsx
-description: Create and edit Excel (.xlsx) workbooks with data, formulas and formatting. Use for budgets, financial models, data tables, calculations, or any .xlsx task.
+description: Create and edit Excel (.xlsx) workbooks with data, formulas and formatting. Use for budgets, financial models, data tables, calculations, editing an uploaded .xlsx, or filling a user's Excel template (.xltx/.xlsx).
 ---
 
 # XLSX skill
@@ -9,68 +9,95 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 
 | Need | Tool |
 |---|---|
+| Read a workbook (values / formats) | `readback.py <file>` / `readback.py <file> --format` |
+| Where is a value? | `find_target.py <file> "<text>" [--sheet S]` |
+| **Edit an uploaded workbook**: values, formulas, cell formats, number formats, conditional formats, column widths | Python `docgen.xlsx` + `docgen.package.Package` (REFERENCE.md §docgen.xlsx) |
+| Insert/delete rows or columns, sort a range (references shift everywhere) | `python /opt/docgen/scripts/xlsx_struct.py ...` |
+| Correct cached formula results (after ANY value/formula change) | `python /opt/docgen/scripts/xlsx_recalc.py <file> [--expect "Sheet!B4=20000"]` |
+| Theme colors / fonts | `docgen.theme.set_color` / `set_fonts` |
 | New workbook with formulas + basic styles (bold + background only) | Python `office_oxide.XlsxWriter` |
-| Precise cells, styles (font color/name/size, fill, alignment), charts, conditional formats | Python `openpyxl` — `Font(name=, size=, color=)`, `PatternFill`, `Alignment(horizontal=)` per cell or range |
-| Data wrangling / large imports | Python `pandas` (optional) |
-| Read any xlsx (fast overview) | Python `office_oxide.Document.open(p).to_markdown()` |
-| Recalculation QA (formulas!) | `python /opt/docgen/scripts/recalc_check.py <file>` |
+| New workbook with full styling, charts, validation | Python `openpyxl` (new files only) |
+| Fill a **user template** (.xltx/.xlsx) | `Package(template).as_document()` + `docgen.xlsx` |
+| .xls / .ods input | `convert_legacy.py` first |
 | Render check | Gotenberg `/forms/libreoffice/convert` (xlsx→PDF) |
-| Validation | `python /opt/docgen/scripts/validate.py <file>` |
+| Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
-> **Important:** written formula cells carry **no cached value**. Excel and
-> LibreOffice compute them on open — which is why formula QA is a dedicated
-> step (`recalc_check.py`), not a visual glance.
+> openpyxl `load_workbook` → `save` on an UPLOADED file drops every cached
+> formula result and rewrites external links, drawings and styles. Use it
+> only for new workbooks; edit uploads with `docgen.xlsx`.
+> office_oxide `EditableDocument.set_cell` leaves dependent results stale.
 
-## Creation workflow
+## Creation workflow (new workbook)
 
-1. Plan the layout before coding: sheet list, column headers, units, and
-   which cells are **inputs** vs **formulas** vs **cross-sheet links**.
-2. Write a Python script in `/workspace/scratch/build_xlsx.py`.
-
-   **XlsxWriter path (default):**
+1. Plan: sheet list, headers, units; which cells are **inputs** vs
+   **formulas** vs **cross-sheet links**.
+2. `/workspace/scratch/build_xlsx.py` with XlsxWriter (simple) or openpyxl
+   (styles/charts/validation):
    ```python
    from office_oxide import XlsxWriter
    wb = XlsxWriter()
    s = wb.add_sheet("Bütçe")                    # -> sheet index 0
    wb.set_column_width(s, 0, 32)                # col A (0-based)
    wb.set_cell_styled(s, 0, 0, "Kalem", bold=True)   # A1  (row/col 0-based)
-   wb.set_cell_styled(s, 0, 1, "Tutar", bold=True)   # B1
-   wb.set_cell(s, 1, 0, "Malzeme")
-   wb.set_cell(s, 1, 1, 12000)                  # input  (B2)
-   wb.set_cell(s, 2, 0, "İşçilik")
-   wb.set_cell(s, 2, 1, 8000)                   # input  (B3)
+   wb.set_cell(s, 1, 0, "Malzeme"); wb.set_cell(s, 1, 1, 12000)
    wb.set_formula(s, 3, 1, "=SUM(B2:B3)")       # B4 — formula WITH "="
-   wb.merge_cells(s, 0, 0, 1, 2)                # merge A1:B1
    wb.save("/workspace/outputs/butce.xlsx")
    ```
-   **API gotchas:**
-   - `row`/`col` are **0-based integers** (A1 = row 0, col 0).
-   - Formulas in `set_formula` **include the leading `=`**; references
-     inside the formula use normal A1 notation.
-   - `EditableDocument.set_cell(sheet_index, cell_ref, value)` is different:
-     it takes an **A1 string** (`"B4"`) — use it for edits on existing files.
+3. QA: `validate.py` → `xlsx_recalc.py <file>` (fills results, reports
+   `#REF!`/`#DIV/0!`…; must PASS) → `readback.py`.
 
-   **openpyxl path:** use it when you need charts, data validation,
-   conditional formatting, or to load+modify an existing workbook.
+## Editing workflow (uploaded workbook)
 
-3. Save the final file to `/workspace/outputs/`.
-4. **QA — all three, in order:**
-   1. `python /opt/docgen/scripts/validate.py <file.xlsx>`
-   2. `python /opt/docgen/scripts/readback.py <file.xlsx>`
-   3. `python /opt/docgen/scripts/recalc_check.py <file.xlsx>`
-      → converts via LibreOffice (Gotenberg), reads the rendered PDF and
-      scans for error tokens (`#REF!`, `#NAME?`, `#DIV/0!`, `#VALUE!`,
-      `#N/A`, `#NULL!`, `#NUM!`). Must report 0 errors.
+Never rebuild an uploaded workbook. Tables, conditional formats,
+validations, charts, images, names and external links must survive.
 
-## Editing workflow
+1. `readback.py` / `find_target.py` to locate. Rows are found by a key
+   column: `X.rows_where(pkg, "Durum", "Servis", "Servis B")`. Several rows
+   match → report them, write no file.
+2. Edit:
+   ```python
+   from docgen.package import Package
+   from docgen import xlsx as X, one
+   pkg = Package("/workspace/uploads/satis.xlsx")
+   X.set_value(pkg, "Satışlar!E2", 18, expect=16)        # expect = the value the user named
+   X.set_style(pkg, "Durum!A1:C1", font={"color": "FFFFFF"}, fill="1F3864")
+   X.set_style(pkg, "Satışlar!G2:G41", number_format="#,##0.00")
+   X.add_conditional_format(pkg, "Satışlar!E2:E41", operator="greaterThan", formula="20", fill="C6EFCE")
+   pkg.save("/workspace/outputs/satis-duzenlenmis.xlsx")
+   ```
+   - `set_style` changes only the named properties; `False` removes one
+     (`font={"underline": False}`) — never reset the whole format.
+   - Guards: overwriting a formula → `NeedsConfirmation` (needs `--onay`,
+     then `allow_formula_overwrite=True`); `expect` mismatch → `ValueMismatch`
+     (report the real value); values starting with `=` → use `set_formula`.
+   - Rows/columns/sort: `xlsx_struct.py IN OUT insert-rows --sheet S --at 10`,
+     `delete-rows` (refuses when formulas/names read the rows; `--onay` only
+     if the user confirmed), `sort --sheet S --range A1:H41 --by G --desc`.
+3. **Recalculate** (mandatory after values/formulas; `xlsx_struct.py` does it
+   itself): `python /opt/docgen/scripts/xlsx_recalc.py OUT`.
+4. Verify:
+   ```bash
+   python /opt/docgen/scripts/validate.py OUT --baseline SRC
+   python /opt/docgen/scripts/diff_check.py SRC OUT --allow-cell "Satışlar!E2" --allow-recalc \
+          --record /workspace/outputs/manifest.json
+   ```
+   Scope flags: `--allow-cell 'Sheet!A1:C9'`, `--allow-sheet S`,
+   `--allow-recalc` (results of dependent formulas), `--allow-structure`
+   (row/column shifts), `--allow-feature cf:Sheet|dv|merged|cols|tables|names|charts`.
+   Example: KDV rate change → `--allow-cell "Parametreler!B2" --allow-recalc`;
+   a summary sheet that does not depend on it must NOT show changes.
 
-1. Read first: `Document.open().to_markdown()` for a fast structural
-   overview; `openpyxl` (`data_only=False`) when you need the actual
-   formulas.
-2. Modify with `openpyxl` (`load_workbook` → edit → `save`) — it preserves
-   most workbook parts.
-3. QA: the same three steps. If the file has formulas, `recalc_check.py`
-   is mandatory, not optional.
+## User template (.xltx / .xlsx given as template)
+
+```python
+from docgen.package import Package
+from docgen import xlsx as X
+pkg = Package("/workspace/uploads/teklif.xltx").as_document()   # template -> workbook
+X.set_value(pkg, "Teklif!B3", "ACME Ltd")
+pkg.save("/workspace/outputs/teklif-acme.xlsx")
+```
+Logo, merged cells, styles and formulas of the template stay as they are;
+then `xlsx_recalc.py` and `validate.py --baseline <template>`.
 
 ## Formula rules (critical)
 
@@ -92,7 +119,7 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 
 **Never** hardcode a number the user expects to be a live calculation.
 
-## Financial color convention (apply to models/budgets)
+## Financial color convention (apply to new models/budgets)
 
 | Meaning | Style |
 |---|---|
@@ -102,13 +129,13 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 | External reference | red font (`#FF0000`) |
 | Key assumption | yellow fill (`#FFFF00`) |
 
-This is the default convention. If the user explicitly asks for a color,
-font or size on specific cells, apply exactly that to those cells
-(QWEN.md › Themes); keep the convention everywhere else.
+This is the default convention for new workbooks. If the user explicitly
+asks for a color, font or size on specific cells, apply exactly that to
+those cells (QWEN.md › Themes); keep the convention everywhere else. Do not
+impose it on uploaded workbooks.
 
 ## Verification
 
-- `recalc_check.py` MUST pass for any workbook containing formulas.
-- For critical totals, double-check by computing the expected value in
-  Python and comparing against the read-back.
+- `xlsx_recalc.py` MUST pass for any workbook containing formulas.
+- Edits: `diff_check.py` must PASS with the declared scope.
 - Max 3 fix iterations on a failing QA step, then report honestly.

@@ -11,7 +11,10 @@ requests>=2.31.0
 openpyxl>=3.1.0
 # güvenli XML parse (PSF)
 defusedxml>=0.7.0
-# görsel QA eklentisi: PDF -> PNG render (Apache-2.0)
-pypdfium2>=4.30.0
+# kullanıcı şablonundan yeni belge/deste üretimi (MIT)
+python-docx>=1.1.0
+python-pptx>=1.0.0
+# PDF sayfa işlemleri + yerinde metin düzenleme; görsel QA render (Apache-2.0 / BSD-3)
+pypdfium2>=5.0.0
 # görsel QA: contact-sheet / imaj işleme (HPND)
 Pillow>=10.0.0

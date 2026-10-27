@@ -10,9 +10,38 @@
 | `/forms/chromium/convert/url` | POST multipart | URL → PDF (`url=` field) |
 | `/forms/libreoffice/convert` | POST multipart | docx/pptx/xlsx → PDF |
 | `/forms/pdfengines/merge` | POST multipart | merge N PDFs (order = `files=` order) |
-| `/forms/pdfengines/crop` | POST multipart | page ranges (`pages=1-2,4`) |
-| `/forms/pdfengines/watermark` | POST multipart | watermark PNG (`watermark.png=@f.png`, `%rotation`, `%scale`, `%opacity`, `%position`) |
-| `/forms/pdfengines/compress` | POST multipart | compress (`mode=lossless`/`lossy`, `compress.images`, `quality`, `dpi`) |
+| `/forms/pdfengines/split` | POST multipart | `splitMode=pages`, `splitSpan=1-3,5`, `splitUnify=true` (one PDF) |
+| `/forms/pdfengines/watermark` | POST multipart | `watermarkSource=text\|image\|pdf`, `watermarkExpression`, `watermarkPages`, `watermarkOptions` (JSON) |
+| `/forms/pdfengines/stamp` | POST multipart | same fields with the `stamp` prefix |
+| `/forms/pdfengines/rotate` | POST multipart | `rotateAngle`, `rotatePages` |
+| `/forms/pdfengines/optimize` | POST multipart | `imageQuality` |
+| `/forms/pdfengines/flatten`, `/metadata/read`, `/metadata/write`, `/encrypt`, `/embed` | POST multipart | as named |
+
+Verified against Gotenberg 8.37 (`pkg/modules/pdfengines/routes.go`): there
+is **no `crop` and no `compress` route**, and no route edits existing text.
+Page delete/keep/move/insert and text edits: `scripts/pdf_pages.py`,
+`scripts/pdf_text.py` (pdfium, below).
+
+## docgen.pdf — page and text editing (pdfium)
+
+```python
+from docgen import pdf as F
+F.find(path, "iki yeni depo", page=None, band=None, near=None)   # matches (page/line context)
+F.replace_text(src, dst, old, new, page=4, near="Defter", occurrence=None,
+               band=None|"header"|"footer", strategy="auto"|"inplace"|"redraw")   # -> report dict
+F.renumber(src, dst)                              # "n / N" page numbers in header/footer bands
+F.delete_pages(src, dst, "4"); F.keep_pages(src, dst, "1-3")
+F.move_pages(src, dst, "5", before=4); F.insert_pdf(src, dst, other, at=None, pages=None)
+F.rotate_pages(src, dst, "2", 90); F.lines(path); F.page_texts(path)
+```
+`replace_text` strategies: *inplace* rewrites the existing text object with
+its own embedded font (only when every new character already appears in
+that font and the line still fits); *redraw* removes the paragraph's lines
+and draws them again with the full font file of the same family (installed:
+Caladea, Carlito, Liberation, DejaVu), wrapping inside the column. It
+refuses mixed-format lines, whole table rows, missing font families and
+text that does not fit before the next block — and verifies the page by
+reading it back before writing.
 
 Multipart conventions:
 - PDFs: field name `files`.

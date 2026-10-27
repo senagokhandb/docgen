@@ -1,0 +1,9 @@
+# derleme bağlamına girmeyecekler (imaja zaten kopyalanmıyorlar)
+.git
+.venv
+.env
+data/
+tests/
+**/__pycache__
+*.pyc
+.DS_Store

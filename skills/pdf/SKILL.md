@@ -1,6 +1,6 @@
 ---
 name: pdf
-description: Create and process PDF files — generate from HTML, merge, split, extract text and tables. Use for any .pdf task.
+description: Create and process PDF files — generate from HTML, edit text or pages of an existing PDF in place, merge, split, watermark, extract text and tables. Use for any .pdf task.
 ---
 
 # PDF skill
@@ -10,71 +10,68 @@ description: Create and process PDF files — generate from HTML, merge, split, 
 | Need | Tool |
 |---|---|
 | New PDF (primary path) | Self-contained HTML + theme CSS → Gotenberg Chromium |
-| Merge PDFs | Gotenberg `/forms/pdfengines/merge` |
-| Crop / page ranges | Gotenberg `/forms/pdfengines/crop` (`pages=1-3` etc.) |
-| Watermark / compress | Gotenberg pdfengines (`watermark`, `compress`) |
-| Extract text + tables | `python /opt/docgen/scripts/readback.py <file.pdf>` (pdfplumber) |
-| Read PDF as markdown | `office_oxide.Document.open(p).to_markdown()` |
-| Render office→PDF (other formats) | Gotenberg `/forms/libreoffice/convert` |
+| Read text / tables | `readback.py <file.pdf> [--tables]`; fonts/positions: `readback.py <file.pdf> --format` |
+| Where does a text occur? | `find_target.py <file.pdf> "<text>" [--page N] [--band header\|footer]` |
+| **Change text in an existing PDF** (sentence, table cell, header/footer text) | `python /opt/docgen/scripts/pdf_text.py IN OUT "<old>" "<new>" [--page N] [--near "row key"] [--band header]` |
+| Delete / keep / move / insert / rotate pages (+ renumber "n / N") | `python /opt/docgen/scripts/pdf_pages.py IN OUT delete 4 --renumber` |
+| Merge PDFs | `pdf_pages.py IN OUT insert other.pdf [--at N]` or Gotenberg `/forms/pdfengines/merge` |
+| Watermark / stamp / optimize | Gotenberg `/forms/pdfengines/watermark` · `stamp` · `optimize` (REFERENCE.md) |
+| Render office→PDF | Gotenberg `/forms/libreoffice/convert` |
+| Verify an edit | `diff_check.py SRC OUT --allow-page N --expect-text "<new>"` |
 
 ## Creation workflow
 
 1. **Design as print HTML.** Write a self-contained file
    `/workspace/scratch/page.html`:
-   - Inline the theme preset: `<link>` is not allowed across requests, so
-     COPY the contents of `/opt/docgen/themes/css/<theme>.css` into a
-     `<style>` block, or reference it as a same-folder file when converting
-     (Gotenberg serves relative paths next to the HTML).
+   - Inline the theme preset: COPY `/opt/docgen/themes/css/<theme>.css` into
+     a `<style>` block (or upload it next to the HTML).
    - A4 page setup, print-safe typography (see REFERENCE.md §print-CSS).
    - User-requested styling for specific content (color, font, size,
      position): put it on exactly that element — inline `style="…"` or a
-     class used only there — so it overrides the theme preset without
-     changing anything else.
+     class used only there.
    - Real content only — no placeholder text.
 2. **Convert:**
    ```bash
-   # Gotenberg 8 chromium motoru HTML dosyasını "index.html" olarak ister.
    curl -s -F "files=@/workspace/scratch/page.html;filename=index.html" \
-     "$GOTENBERG_URL/forms/chromium/convert/html" \
-     -o /workspace/outputs/<ad>.pdf
+     "$GOTENBERG_URL/forms/chromium/convert/html" -o /workspace/outputs/<ad>.pdf
    ```
-3. **QA:**
-   - `readback.py` on the result: verify all expected content is present,
-     no text cut off at page breaks.
-   - Check page count matches expectation (pdfplumber `len(pdf.pages)`).
-   - If a table splits badly across pages, add `page-break-inside: avoid`.
+3. **QA:** `readback.py` (all content present, nothing cut off), page count.
 
-## Processing workflow
+## Editing workflow (uploaded PDF)
 
-```bash
-# merge
-curl -s -F "files=@a.pdf" -F "files=@b.pdf" \
-  "$GOTENBERG_URL/forms/pdfengines/merge" -o /workspace/outputs/merged.pdf
+Edit the PDF itself; do not re-create it from extracted text (that changes
+fonts, spacing and every page). If the user also uploaded the source
+(docx/pptx/html) and asks for a bigger change, edit the source and re-render.
 
-# crop (page ranges, 1-based, comma-separated)
-curl -s -F "files=@deck.pdf" -F "pages=1-3,7" \
-  "$GOTENBERG_URL/forms/pdfengines/crop" -o /workspace/outputs/kisa.pdf
+1. `find_target.py` → one match? Use `--page`, `--near` (another text on the
+   same line, e.g. the product name of a table row) or `--band` to narrow.
+   Still several → report the candidates, write no file.
+2. Text: `pdf_text.py SRC OUT "<old>" "<new>" ...` — only that line or
+   paragraph is rewritten, in the document's own font family. For a table
+   cell give the cell text as `<old>` plus `--near "<row key>"`.
+   Pages: `pdf_pages.py SRC OUT delete 4 --renumber` (also `keep`, `move 5
+   --before 4`, `insert other.pdf --at 3`, `rotate 2 --degrees 90`).
+   Header text on every page: run `pdf_text.py ... --band header --page N`
+   once per page (chain the outputs).
+3. Verify: `diff_check.py SRC OUT --allow-page 4 --expect-text "<new>"`
+   (`--allow-structure --allow-band` for page operations with renumbering).
 
-# watermark (PNG file, %rotation etc. via form fields — see REFERENCE.md)
-curl -s -F "files=@a.pdf" -F "watermark.png=@logo.png" -F "watermark.png%rotation=45" \
-  "$GOTENBERG_URL/forms/pdfengines/watermark" -o /workspace/outputs/w.pdf
-```
-After any pdfengine operation: `readback.py` sanity check (page count +
-first/last page text).
-
-## Rules
-
-- **"Edit this PDF":** first ask/look for the source file (docx/pptx/html)
-  in `/workspace/uploads/`. If a source exists, edit the source and
-  re-render. If only the PDF exists, explain the realistic options
-  (overlay, merge, re-create from extracted text) and pick the safest.
-- **Scanned / image-only PDFs:** text extraction returns little or
-  nothing — in that case tell the user OCR is needed (their Docling
-  pipeline, outside this container); do not guess content.
-- **Never invent content** to fill a page.
+**Refuse honestly (no file, explain why) when:**
+- `pdf_text.py` says the text does not fit / the font family is missing /
+  the line mixes formatting — offer to edit the source document instead;
+  never re-create the PDF without the user's consent.
+- The request is a color/bold/font/alignment change of existing PDF text
+  — not supported in place; offer to edit the source file.
+- Moving a section that does not start/end on a page boundary (moving
+  whole pages would also move other content) — explain and ask.
+- Inserting a lot of new content: there is no reflow. With the user's
+  placement ("2. sayfadan sonra yeni sayfalara"), render the new pages as
+  HTML styled like the document (same font family/size/margins, read them
+  with `readback.py --format`) and insert them with `pdf_pages.py insert`.
+- **Scanned / image-only PDFs:** no text layer → OCR is needed (outside
+  this container); do not guess content.
 
 ## Visual QA (off by default)
 
-`--visual-qa` (screenshot-based layout review using a vision model via the
-user's Docling setup) is **disabled** unless the user explicitly includes
+`--visual-qa` is **disabled** unless the user explicitly includes
 `--visual-qa` in the request. Do not run it proactively.

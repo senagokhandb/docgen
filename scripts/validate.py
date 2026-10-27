@@ -2,9 +2,16 @@
 """DOCGEN validation: structural checks + optional ECMA-376 XSD validation.
 
 Usage:
-    validate.py <file> [--json]
+    validate.py <file> [--baseline <original>] [--json]
 
-Supported: .docx .xlsx .pptx (OOXML) and .pdf
+Supported: .docx .xlsx .pptx (+ .dotx/.docm .potx/.pptm .xltx/.xlsm) and .pdf
+
+--baseline: when <file> is an edit of (or built on) an existing file, pass
+that file here. Schema findings that already exist in the baseline are
+reported as "pre-existing" and do not fail the check — only new ones do.
+Markup-compatibility content (mc:Ignorable namespaces such as w14/w15 and
+mc:AlternateContent) is reduced to its standard fallback before XSD checks.
+
 Exit codes: 0 = pass, 1 = fail, 2 = usage error
 """
 import argparse
@@ -39,11 +46,47 @@ XSD_REQUIRED_PARTS = {
 }
 
 
+KINDS = {"docx": "docx", "dotx": "docx", "docm": "docx", "pptx": "pptx", "potx": "pptx", "pptm": "pptx",
+         "xlsx": "xlsx", "xltx": "xlsx", "xlsm": "xlsx", "pdf": "pdf"}
+MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
 def _schema_for(part: str):
     for pattern, xsd in PART_SCHEMA:
         if pattern.match(part):
             return xsd
     return None
+
+
+def strip_markup_compatibility(root):
+    """Apply MCE processing as a consumer that understands no extensions:
+    mc:AlternateContent -> its mc:Fallback, ignorable namespaces removed."""
+    ignorable = set()
+    for el in root.iter():
+        val = el.get(f"{{{MC_NS}}}Ignorable") if isinstance(el.tag, str) else None
+        for prefix in (val or "").split():
+            if el.nsmap.get(prefix):
+                ignorable.add(el.nsmap[prefix])
+    for ac in list(root.iter(f"{{{MC_NS}}}AlternateContent")):
+        parent = ac.getparent()
+        if parent is None:
+            continue
+        idx = parent.index(ac)
+        fallback = ac.find(f"{{{MC_NS}}}Fallback")
+        parent.remove(ac)
+        for i, ch in enumerate(list(fallback) if fallback is not None else []):
+            parent.insert(idx + i, ch)
+    for el in list(root.iter()):
+        if not isinstance(el.tag, str):
+            continue
+        if etree.QName(el).namespace in ignorable:
+            if el.getparent() is not None:
+                el.getparent().remove(el)
+            continue
+        for k in list(el.attrib):
+            if etree.QName(k).namespace in ignorable or etree.QName(k).namespace == MC_NS:
+                del el.attrib[k]
+    return root
 
 
 def structural_check(path: Path):
@@ -120,14 +163,14 @@ def xsd_check(path: Path, kind: str):
             if schema is None:
                 continue
             try:
-                elem = etree.fromstring(zf.read(name))
+                elem = strip_markup_compatibility(etree.fromstring(zf.read(name)))
             except Exception as e:
                 errors.append(f"cannot parse {name} for XSD check: {e}")
                 continue
             checked += 1
             if not schema.validate(elem):
                 for err in schema.error_log[:20]:
-                    errors.append(f"XSD {xsd_name} :: {name} :: line {err.line}: {err.message}")
+                    errors.append(f"XSD {xsd_name} :: {name} :: {err.message}")
 
         if checked == 0:
             warnings.append("no parts matched the XSD part map (or no schemas present)")
@@ -154,40 +197,64 @@ def pdf_check(path: Path):
     return errors, warnings
 
 
+def run_checks(path: Path, kind: str):
+    if kind == "pdf":
+        return pdf_check(path)
+    errors, warnings = structural_check(path)
+    if not errors:
+        e, w = xsd_check(path, kind)
+        errors += e
+        warnings += w
+    else:
+        warnings.append("structural errors — XSD validation skipped")
+    return errors, warnings
+
+
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file")
+    ap.add_argument("--baseline", help="original file this one was edited from / built on")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
 
     path = Path(args.file)
-    kind = path.suffix.lstrip(".").lower()
-    if kind not in ("docx", "xlsx", "pptx", "pdf"):
-        print(f"usage error: unsupported extension .{kind}", file=sys.stderr)
+    kind = KINDS.get(path.suffix.lstrip(".").lower())
+    if kind is None:
+        print(f"usage error: unsupported extension {path.suffix}", file=sys.stderr)
         return 2
 
-    if kind == "pdf":
-        errors, warnings = pdf_check(path)
-    else:
-        errors, warnings = structural_check(path)
-        if not errors:
-            e, w = xsd_check(path, kind)
-            errors += e
-            warnings += w
-        else:
-            warnings.append("structural errors — XSD validation skipped")
+    errors, warnings = run_checks(path, kind)
+    preexisting = []
+    if args.baseline:
+        base = Path(args.baseline)
+        if KINDS.get(base.suffix.lstrip(".").lower()) != kind:
+            print("usage error: --baseline must be the same format", file=sys.stderr)
+            return 2
+        remaining = list(run_checks(base, kind)[0])
+        new_errors = []
+        for e in errors:
+            if e.startswith("XSD") and e in remaining:
+                remaining.remove(e)
+                preexisting.append(e)
+            else:
+                new_errors.append(e)
+        errors = new_errors
+        if preexisting:
+            warnings.append(f"{len(preexisting)} schema finding(s) already present in the baseline (not counted)")
 
     ok = not errors
     if args.json:
         print(json.dumps({
             "file": str(path), "kind": kind, "ok": ok,
-            "errors": errors, "warnings": warnings,
+            "errors": errors, "warnings": warnings, "preexisting": preexisting,
         }, ensure_ascii=False, indent=2))
     else:
         status = "PASS" if ok else "FAIL"
         print(f"[validate] {status}  {path}  ({kind})")
         for w in warnings:
             print(f"  warn: {w}")
+        for e in preexisting:
+            print(f"  pre-existing: {e}")
         for e in errors:
             print(f"  ERROR: {e}")
     return 0 if ok else 1

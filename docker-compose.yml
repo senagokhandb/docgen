@@ -37,6 +37,9 @@ services:
       # Girdi / çıktı / çalışma alanı — makineye eşlenir.
       # Agent'ın gördüğü kök: /workspace
       - ./data:/workspace
+      # Kullanıcı dosyaları gerçekten salt okunur: orijinal her zaman korunur
+      # (geri alma = orijinali kullanmak). Kural değil, mount ile zorunlu.
+      - ./data/uploads:/workspace/uploads:ro
     networks:
       - docgen
     depends_on:

@@ -1,6 +1,6 @@
 ---
 name: docx
-description: Create, edit and validate Word (.docx) documents. Use when the user asks for a Word document, report, letter, contract or any .docx output, or to modify an existing .docx file.
+description: Create, edit and validate Word (.docx) documents. Use when the user asks for a Word document, report, letter, contract or any .docx output, to modify an existing .docx file, or to build a document on a user's Word template (.dotx/.docx).
 ---
 
 # DOCX skill
@@ -9,93 +9,122 @@ description: Create, edit and validate Word (.docx) documents. Use when the user
 
 | Need | Tool |
 |---|---|
+| Read any docx (incl. .dotx) | `python /opt/docgen/scripts/readback.py <file> [--format]` |
+| Where does a text occur? | `python /opt/docgen/scripts/find_target.py <file> "<text>" [--section S] [--headings]` |
+| **Edit an uploaded docx** (text, formatting, paragraphs, sections, tables, styles) | Python `docgen.docx` + `docgen.package.Package` (REFERENCE.md §docgen.docx) |
+| Theme colors / fonts of a document | `docgen.theme.set_color` / `set_fonts` |
 | New doc from markdown (fast path) | Python `office_oxide.create_from_markdown(md, "docx", out)` |
-| Read any docx | Python `office_oxide.Document.open(p).to_markdown()` |
-| Safe in-place text edit | Python `office_oxide.EditableDocument` (`replace_text`, `save`) |
-| Full-control creation (styles, sections, tables, headers, page numbers) | Node `docx` (docx-js) script in `/workspace/scratch/` |
-| Structural edit (styles.xml, headers, numbering) | unzip → edit XML with `lxml` → rezip |
-| Style edit on existing doc (color, font, size, alignment) | unzip → edit `w:rPr` / `w:pPr` in `word/document.xml` with `lxml` → rezip (`EditableDocument` cannot style) |
+| New doc, full control (styles, sections, tables, headers, page numbers, per-run styling) | Node `docx` (docx-js) script in `/workspace/scratch/` |
+| New doc on a **user template** | `docgen.docx.start_from_template` + python-docx |
+| .doc / .rtf / .odt input | `convert_legacy.py` first, then edit the .docx |
 | Render check / deliverable PDF | Gotenberg `/forms/libreoffice/convert` |
-| Validation | `python /opt/docgen/scripts/validate.py <file>` |
+| Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
-## Creation workflow
+`office_oxide.EditableDocument.replace_text` is NOT for targeted edits: it
+replaces every occurrence, also inside longer words, and spreads formatting
+across run boundaries.
 
-1. Read this skill (done) and the user's request. Decide: semantic structure
-   (title, headings, sections, tables) and whether a theme applies.
-2. **Default path (fast):** write the content as markdown in
-   `/workspace/scratch/doc.md` using real heading levels (`#` title, `##`
-   sections) and pipe tables, then:
+## Creation workflow (new document)
+
+1. Read the request. Decide: semantic structure (title, headings, sections,
+   tables) and whether a theme or a user template applies.
+2. **Fast path:** markdown in `/workspace/scratch/doc.md` (real heading
+   levels, pipe tables), then
+   `create_from_markdown(open(md).read(), "docx", "/workspace/outputs/<ad>.docx")`
+   (it takes the markdown STRING; no per-element styling).
+3. **Full-control path:** specific styling (custom styles, page numbers,
+   headers/footers, complex tables, colors/fonts/sizes on particular text)
+   → Node script with the `docx` package (REFERENCE.md §docx-js).
+4. Verify: `validate.py` → `readback.py` → Gotenberg render.
+
+## Editing workflow (uploaded document)
+
+Never rebuild an uploaded document; change only what was asked.
+
+1. `readback.py <file>` to see the structure; `find_target.py` to locate the
+   target. Several matches → use the user's context (`section=`, table row,
+   heading path). Still several → report the candidates, write no file.
+2. Write `/workspace/scratch/edit.py` with the helpers:
    ```python
-   from office_oxide import create_from_markdown
-   md = open("/workspace/scratch/doc.md").read()   # takes the STRING
-   create_from_markdown(md, "docx", "/workspace/outputs/<ad>.docx")
-   ```
-   (`create_from_markdown` accepts the markdown text, not a file path.)
-3. **Full-control path:** when the user asks for specific styling (custom
-   styles, page numbers, headers/footers, complex tables, or a color /
-   font / size / alignment on particular text), write a Node script using
-   the `docx` package (see REFERENCE.md §docx-js) and run it with `node`.
-   `create_from_markdown` cannot apply per-element styling.
-4. Verify: `validate.py` → `readback.py` → Gotenberg office→PDF render.
-   All three must pass.
+   from docgen.package import Package
+   from docgen import docx as D, one
+   src = "/workspace/uploads/rapor.docx"
+   pkg = Package(src)
 
-## Editing workflow (existing file)
+   # text: exactly one occurrence, formatting kept
+   D.replace(one(D.find(pkg, "önerilir", section="Sonuç", whole_word=True), "önerilir"), "zorunludur")
 
-1. **Understand first:** `Document.open(path).to_markdown()` — read the
-   current structure before touching anything.
-2. **Simple text changes:**
-   ```python
-   from office_oxide import EditableDocument
-   d = EditableDocument.open(path)
-   n = d.replace_text("eski metin", "yeni metin")  # n = replacement count
-   d.save(path)
+   # character formatting of an expression (runs are split at the boundaries)
+   m = one(D.find(pkg, "kritik sistemler"), "kritik sistemler")
+   D.set_run_props(D.split_runs(m), pkg=pkg, color="006400")      # also bold/italic/underline/
+                                                                  # strike/size/font/highlight; False removes
+   # paragraph formatting of one paragraph
+   D.set_paragraph_props([one(D.find_paragraphs(pkg, "Giriş", headings_only=True))], align="center")
+
+   pkg.save("/workspace/outputs/rapor-duzenlenmis.docx")
    ```
-   Unmodified OPC parts (styles, numbering, images) are preserved.
-3. **Targeted style changes** ("bu başlığı kırmızı yap", "tablo başlıkları
-   14 punto olsun"): unzip/rezip as in step 4, but patch only the matching
-   runs/paragraphs in `word/document.xml` — do NOT rebuild the document.
-   - Find the `w:r` runs whose `w:t` text matches; in each run's `w:rPr`
-     (create it as the run's first child if missing) set:
-     - font: `<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>`
-     - color: `<w:color w:val="FF0000"/>` (hex, no `#`)
-     - size: `<w:sz w:val="28"/><w:szCs w:val="28"/>` (half-points: 28 = 14 pt)
-     - child order is fixed by the schema: `w:rStyle`, `w:rFonts`, `w:b`,
-       `w:i`, …, `w:color`, …, `w:sz`, `w:szCs`, `w:highlight`, `w:u` —
-       insert in that order, replace existing ones instead of duplicating.
-   - Alignment: `<w:jc w:val="center"/>` (`left`/`right`/`both`) in the
-     paragraph's `w:pPr`.
-   - Table cell background: `<w:shd w:val="clear" w:color="auto"
-     w:fill="006400"/>` in that cell's `w:tcPr`.
-   - If the target text is only part of a run, split the run (copy its
-     `w:rPr` to the new runs) and style only the target part. Text may also
-     be split across several runs — match on the paragraph's joined text.
-   - "All headings" scope → change the style in `word/styles.xml`
-     (e.g. `Heading1`) instead of every run.
-   - An order mistake shows up in `validate.py` as "This element is not
-     expected" — fix the order and re-run.
-4. **Structural changes** (new styles, headers, numbering, section breaks):
-   - unzip to `/workspace/scratch/` (`unzip -o file.docx -d scratch_docx`)
-   - edit `word/document.xml` / `word/styles.xml` with `lxml`
-     (mind the OOXML namespaces — see REFERENCE.md)
-   - rezip from inside the folder: `cd scratch_docx && zip -r ../new.docx . -x ".*"`
-5. Verify: validate → readback (confirm the exact change is present) →
-   Gotenberg render.
+   Scope rules:
+   - one expression → `split_runs` + `set_run_props`; one paragraph → its runs /
+     `set_paragraph_props`; **all headings / all body text** →
+     `set_style_props(pkg, style_id, ...)` (`style_ids_for_level(pkg, 2)` gives
+     the level-2 heading styles, incl. derived ones).
+   - replace every occurrence only when asked: `D.replace_all(pkg, "risk", "tehdit",
+     whole_word=True)`; inflected forms ("riski") stay — mention them.
+   - sections: `D.section_blocks`, `D.append_to_section(pkg, heading, D.new_paragraph(text, like=para))`,
+     `D.delete_section(pkg, heading)`; paragraphs: `D.set_paragraph_text`,
+     `D.insert_after`, `D.delete`.
+   - tables: `D.find_table`, `D.table_rows`, `D.set_cell_text`, `D.add_row`,
+     `D.add_column`, `D.delete_column`, `D.set_cell_shading`.
+   - theme recolor: `docgen.theme.set_color(pkg, "accent1", "2E7D32")`
+     (author-set colors stay as they are).
+3. Verify:
+   ```bash
+   python /opt/docgen/scripts/validate.py OUT --baseline SRC
+   python /opt/docgen/scripts/diff_check.py SRC OUT --allow-section "Sonuç" --text-only \
+          --expect-text "zorunludur" --record /workspace/outputs/manifest.json
+   python /opt/docgen/scripts/readback.py OUT --format     # style edits
+   ```
+   Scope flags: `--allow-text`, `--allow-section`, `--allow-style ID`,
+   `--allow-theme`, `--allow-part 'word/numbering.xml'`; `--text-only` for text
+   edits, `--format-only` for formatting edits.
+
+## User template (.dotx / .docx given as template)
+
+The template's styles, theme, numbering, headers/footers (logo) and page
+setup define the look; docgen themes do NOT apply.
+
+```python
+from docgen.docx import start_from_template, style_names
+from docgen.package import Package
+import docx as pydocx                      # python-docx
+
+out = "/workspace/outputs/politika.docx"
+start_from_template("/workspace/uploads/kurumsal.dotx", out)   # .dotx -> .docx, body emptied
+print(style_names(Package(out)))           # use THESE style names
+d = pydocx.Document(out)
+d.add_paragraph("Uzaktan Çalışma Politikası", style="Heading 1")
+d.add_paragraph("…", style="Normal")
+d.save(out)
+```
+Verify with `validate.py out --baseline <template>` and readback (headers,
+footers and logo must still be there). If the template has `{{PLACEHOLDER}}`
+fields, fill them in place with `D.replace(one(D.find(pkg, "{{AD}}")), "…")`.
 
 ## Quality rules
 
 - One `H1` (document title), `H2` for sections — never skip levels.
 - Tables: caption above, sensible column widths, header row styled.
-- Keep font consistency: use the default template typography unless a theme
-  or the user specifies otherwise.
-- Never deliver a file that fails `validate.py`.
-- For long documents: build section by section, read-back after each
-  major section, not just at the end.
+- Keep font consistency: default template typography unless a theme, a
+  user template or the user specifies otherwise.
+- Never deliver a file that fails `validate.py` (with `--baseline` for edits)
+  or `diff_check.py`.
 
 ## Failure modes & fixes
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| validate.py: schema error on `w:` element | wrong namespace or missing `mc:Ignorable` | use canonical prefixes (see REFERENCE.md) |
-| readback shows doubled/missing text | `replace_text` matched inside a split run | unzip and fix `w:t` runs directly |
-| Gotenberg render fails | broken zip or malformed part | `zip -T` check, re-zip from clean extraction |
-| styles not applied after XML edit | edited the wrong part (styles live in `word/styles.xml`, not `document.xml`) | re-locate the part |
+| `Ambiguous` from `one()` | text occurs several times | add `section=`, `whole_word=True`, table/row context; else report candidates |
+| `diff_check` FAIL "character format (request was text-only)" | replacement spread formatting | replace only the exact expression (`find` + `replace`) |
+| validate: error that also exists in the original | pre-existing Word quirk | always pass `--baseline <original>` for edits |
+| style change not visible | run has direct formatting overriding the style, or theme font/color | change the runs, or remove the direct formatting (`False`) |
+| Gotenberg render fails | broken zip or malformed part | rebuild with `Package.save`, never hand-zip |

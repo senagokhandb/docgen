@@ -1,5 +1,52 @@
 # XLSX — technical reference
 
+## docgen.xlsx — in-place editing API
+
+```python
+from docgen.package import Package
+from docgen import xlsx as X, one
+pkg = Package(path)                         # .xlsx; templates: Package(p).as_document()
+
+# --- read / locate -----------------------------------------------------
+X.sheets(pkg)                               # [(name, part, state)]
+X.get(pkg, "Satışlar!E2")                   # (value, "=formula" | None); value = cached result for formulas
+X.cells(pkg, "Satışlar")                    # iterate (ref, value, formula)
+X.find(pkg, "Başarısız", sheet="Durum", exact=False)      # ['Durum!B3', ...]
+X.column_of(pkg, "Durum", "Not")            # column letter of a header
+X.rows_where(pkg, "Durum", "Servis", "Servis B")           # row numbers by key column (letter or header)
+
+# --- write -------------------------------------------------------------
+X.set_value(pkg, "Satışlar!E2", 18, expect=16, allow_formula_overwrite=False)   # str/int/float/bool/None
+X.set_formula(pkg, "Özet!B12", "=SUM(B4:B9)")
+X.formula_to_value(pkg, "Özet!B4:B9", force=True)          # only with --onay
+X.set_style(pkg, "Durum!A1:C1",
+            font={"bold": True, "italic": False, "underline": False, "strike": False,
+                  "color": "FFFFFF", "size": 14, "name": "Arial"},
+            fill="1F3864",                  # or False = no fill
+            number_format="#,##0.00",
+            align={"horizontal": "center", "vertical": "center", "wrap": True})
+X.add_conditional_format(pkg, "Satışlar!E2:E41", operator="greaterThan", formula="20", fill="C6EFCE")
+X.add_conditional_format(pkg, "Durum!A2:C9", expression='=$B2="Başarısız"', fill="F8CBAD")
+X.set_column_width(pkg, "Satışlar", "B", 24)
+X.dependents_of_rows(pkg, "Parametreler", 2, 2)            # who reads these rows (before deleting)
+X.features(pkg)                                             # tables/CF/DV/merged/charts/images/... per sheet
+pkg.save(dst)
+```
+Every value/formula change sets `fullCalcOnLoad` and drops `calcChain.xml`;
+run `xlsx_recalc.py` afterwards so the stored results are correct.
+Errors: `NeedsConfirmation`, `docgen.xlsx.ValueMismatch`, `Ambiguous`, `NotFound`.
+
+## Structural operations — `scripts/xlsx_struct.py` (docgen.xlsx_struct)
+
+`insert-rows/delete-rows/insert-cols/delete-cols/sort` edit the sheet XML in
+place and shift every reference to that sheet: formulas on all sheets
+(shared/array included), defined names and print titles, conditional
+formats and validations (ranges + formulas), tables, merged cells,
+hyperlinks, auto-filters, comments, drawing anchors and chart series.
+Refusals: deleting cells that are read elsewhere (needs `--onay`), sorting
+rows whose formulas read other rows, merged cells inside a sort range,
+pivot tables. Afterwards it runs `xlsx_recalc.py` itself.
+
 ## office_oxide Python API (verified signatures)
 
 ```python
@@ -80,18 +127,17 @@ wb.save("x.xlsx")
 | External reference | font `#FF0000` (red) |
 | Key assumption | fill `#FFFF00` (yellow) |
 
-## QA: recalc_check.py flow
+## QA: xlsx_recalc.py flow (primary)
 
-1. `POST $GOTENBERG_URL/forms/libreoffice/convert` (xlsx→PDF) — LibreOffice
-   recalculates formulas on load.
-2. `pdfplumber` extracts the rendered text.
-3. Scan for error tokens: `#REF!`, `#NAME?`, `#DIV/0!`, `#VALUE!`, `#N/A`,
-   `#NULL!`, `#NUM!`.
-4. Optional `--expect "label:12345.67"` — verifies specific rendered values.
-5. JSON report + exit code (0 = clean).
+1. LibreOffice (headless, in the container, profile forces "always
+   recalculate") converts a copy to xlsx — i.e. computes every formula.
+2. The computed results are written into the ORIGINAL package as cached
+   values (`<v>` + type); nothing else is rewritten.
+3. Report: changed results, error cells (`#REF!`, `#DIV/0!`…), NEW errors
+   (exit 1), `--expect "Sheet!B4=20000"` checks.
 
-Note: formulas written by office_oxide/openpyxl have **no cached values**;
-LibreOffice computes them on load — so the recalc QA is the source of truth.
+`recalc_check.py` (Gotenberg → PDF → text scan) remains as a fallback when
+LibreOffice is not available; it cannot write results back.
 
 ## OOXML anatomy (xlsx = zip)
 
