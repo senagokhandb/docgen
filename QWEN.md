@@ -35,7 +35,9 @@ rules for that format:
 - Excel:       `/home/agent/.qwen/skills/xlsx/SKILL.md` (+ `REFERENCE.md`)
 - PDF:         `/home/agent/.qwen/skills/pdf/SKILL.md` (+ `REFERENCE.md`)
 
-If a skill conflicts with these rules, the skill wins.
+If a skill conflicts with these rules, the skill wins — **except** the
+explicit-user-request rule under *Themes*: it overrides every skill rule
+about theme colors, font families and color conventions.
 
 ---
 
@@ -59,6 +61,24 @@ Generated base templates: `/opt/docgen/themes/templates/`
   exactly what they asked — even if it is outside the theme tokens. Apply
   the change at the exact scope requested (one heading vs. all headings),
   not more.
+
+**Element-level styling — you write the code.** You are not limited to
+helper scripts: write your own script in `/workspace/scratch/` and set
+color, font, size and position on exactly the paragraph / run / cell /
+slide / shape the user means. Pick an engine that can express it:
+
+| Format | New file | Existing file |
+|---|---|---|
+| DOCX | docx-js `TextRun` (`color`, `font`, `size` in half-points), `Paragraph` (`alignment`, `spacing`, `indent`), `TableCell` (`shading`) | `lxml` on `word/document.xml`: `w:rPr` → `w:rFonts`, `w:color`, `w:sz`; `w:pPr` → `w:jc` |
+| PPTX | pptxgenjs `addText` (`x`,`y`,`w`,`h`, `color`, `fontFace`, `fontSize`, `align`; run arrays for part of a line) | `lxml` on `ppt/slides/slideN.xml`: `a:rPr` (`sz`, `a:solidFill`, `a:latin`); position `p:spPr/a:xfrm/a:off` |
+| XLSX | openpyxl `Font(name, size, color)`, `PatternFill`, `Alignment` per cell | openpyxl `load_workbook` → same |
+| PDF | inline CSS on that element (`style="color:#C00000"`) | regenerate from the HTML |
+
+- **office_oxide cannot set font color, font family or size** (`XlsxWriter`:
+  bold + background only; `PptxWriter` / `EditableDocument`: no styling).
+  Do not use it for style requests.
+- A style change in an existing file → patch only that element; do not
+  regenerate the whole document. Format details are in each skill.
 
 **Anti-AI style rules (always, all formats):**
 - No decorative accent lines or bars under titles.

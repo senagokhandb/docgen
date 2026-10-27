@@ -80,12 +80,13 @@ Görsel QA **varsayılan olarak kapalıdır**; istekte `--visual-qa` varsa
 |---|---|---|
 | Ofis dosyası okuma (markdown/HTML/düz metin) | office_oxide `Document` | Python |
 | Markdown'dan DOCX/PPTX/XLSX (hızlı yol) | office_oxide `create_from_markdown` | Python |
-| XLSX üretimi: hücre, formül, stil, birleştirme | office_oxide `XlsxWriter` | Python |
-| PPTX üretimi (basit/sadece metin) | office_oxide `PptxWriter` | Python |
-| Mevcut ofis dosyasında metin/hücre düzenleme | office_oxide `EditableDocument` | Python |
-| Hassas xlsx hücre/stil/formül (mevcut dosya) | openpyxl | Python |
-| DOCX tam kontrol (tarz, başlık/altlık, tablo) | docx (docx-js) | Node |
-| PPTX tam kontrol (şema, grafik, görsel) | pptxgenjs | Node |
+| XLSX üretimi: hücre, formül, birleştirme, stil (yalnız kalın + arka plan) | office_oxide `XlsxWriter` | Python |
+| PPTX üretimi (basit/sadece metin, stilsiz) | office_oxide `PptxWriter` | Python |
+| Mevcut ofis dosyasında metin/hücre değeri düzenleme (stil yok) | office_oxide `EditableDocument` | Python |
+| Hassas xlsx hücre/stil/formül (font rengi/adı/punto, dolgu, hizalama) | openpyxl | Python |
+| DOCX tam kontrol (tarz, başlık/altlık, tablo, run/paragraf/hücre stili) | docx (docx-js) | Node |
+| PPTX tam kontrol (şema, grafik, görsel, metin/şekil stili ve konumu) | pptxgenjs | Node |
+| Mevcut DOCX/PPTX'te eleman bazlı stil (renk, font, punto, konum) | lxml ile XML yaması | Python |
 | PDF metin/tablo çıkarma (QA geri-okuma) | pdfplumber | Python |
 | XML parse + XSD doğrulama | lxml | Python |
 | Güvenli XML parse | defusedxml | Python |
@@ -97,6 +98,29 @@ Görsel QA **varsayılan olarak kapalıdır**; istekte `--visual-qa` varsa
 
 Tüm bağımlılıklar açık kaynak (MIT / BSD / Apache-2.0 / HPND / PSF);
 lisanslar `requirements.txt` ve `package.json` içinde satır satır belirtilir.
+
+### 3.1 Eleman seviyesinde stil kontrolü
+
+Agent hazır script'lerle sınırlı değildir: her istek için kendi kodunu
+`/workspace/scratch/` altına serbestçe yazar. Bu yüzden "şu yazıyı şu renk
+yap" gibi bir istek doğrudan koda çevrilir ve yalnızca istenen
+paragraf / run / hücre / slayt / şekil üzerinde uygulanır.
+
+| Format | Yeni dosya | Mevcut dosya | Kontrol edilenler |
+|---|---|---|---|
+| DOCX | docx-js `TextRun`, `Paragraph`, `TableCell` | lxml: `w:rPr`, `w:pPr`, `w:tcPr` | renk, font, punto, kalın/italik, hizalama, hücre dolgusu |
+| PPTX | pptxgenjs `addText` (`x/y/w/h`, run dizileri) | lxml: `a:rPr`, `a:pPr`, `a:xfrm` | renk, font, punto, hizalama, konum ve boyut |
+| XLSX | openpyxl `Font`, `PatternFill`, `Alignment` | openpyxl `load_workbook` | hücre/aralık bazında renk, font, punto, dolgu, hizalama |
+| PDF | HTML + eleman bazlı CSS → Gotenberg | HTML'den yeniden üretim | CSS'in her şeyi |
+
+- **office_oxide stil motoru değildir:** `XlsxWriter` yalnız kalın + arka
+  plan rengi verebilir; `PptxWriter` ve `EditableDocument` stil ayarlayamaz.
+  Stil istekleri yukarıdaki motorlara gider.
+- Mevcut dosyada tek bir stil değişikliği için dosya baştan üretilmez;
+  yalnızca ilgili eleman yamalanır. XML sırası hatalıysa `validate.py`
+  ("This element is not expected") yakalar, agent düzeltip tekrar dener.
+- Format bazlı adımlar skill dosyalarındadır (`skills/*/SKILL.md` ›
+  *Targeted style changes*).
 
 ---
 
@@ -185,8 +209,13 @@ accent_lines_under_titles}`.
 - HTML→PDF için her temanın yazdırılabilir CSS preset'i var
   (`themes/css/*.css`: A4 @page, tablo başlığı tekrarı, page-break kuralları).
 - PPTX için `build_themed_deck.js` token'ları master'a uygular.
-- Agent kuralı: tema dışı renk/font üretmek yasak; tema seçimi final
-  raporda belirtilir.
+- Agent kuralı: tema token'ları **varsayılandır**; agent kendiliğinden tema
+  dışı renk/font üretmez. Tema seçimi final raporda belirtilir.
+- **Kullanıcının açık isteği temayı ezer:** "başlığı kırmızı yap", "bu
+  tablonun başlıklarını koyu yeşil yap", "font 14 punto olsun" gibi
+  isteklerde tam olarak istenen uygulanır, tema dışında olsa bile, ve
+  yalnızca istenen kapsamda (tek başlık ↔ tüm başlıklar). Bu kural skill'lerdeki
+  tema/font/renk konvansiyonu kurallarından da önce gelir (bkz. Bölüm 3.1).
 
 **Anti-AI stil kuralları (tüm formatlar):** başlık altı dekoratif çizgi/çubuk
 yok; slayt başına en fazla 6 kısa madde; en fazla 2 font ailesi; her

@@ -9,8 +9,8 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 
 | Need | Tool |
 |---|---|
-| New workbook with formulas + basic styles | Python `office_oxide.XlsxWriter` |
-| Precise cells, styles, charts, conditional formats | Python `openpyxl` |
+| New workbook with formulas + basic styles (bold + background only) | Python `office_oxide.XlsxWriter` |
+| Precise cells, styles (font color/name/size, fill, alignment), charts, conditional formats | Python `openpyxl` — `Font(name=, size=, color=)`, `PatternFill`, `Alignment(horizontal=)` per cell or range |
 | Data wrangling / large imports | Python `pandas` (optional) |
 | Read any xlsx (fast overview) | Python `office_oxide.Document.open(p).to_markdown()` |
 | Recalculation QA (formulas!) | `python /opt/docgen/scripts/recalc_check.py <file>` |
@@ -101,6 +101,10 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 | Link to another sheet (internal) | green font (`#008000`) |
 | External reference | red font (`#FF0000`) |
 | Key assumption | yellow fill (`#FFFF00`) |
+
+This is the default convention. If the user explicitly asks for a color,
+font or size on specific cells, apply exactly that to those cells
+(QWEN.md › Themes); keep the convention everywhere else.
 
 ## Verification
 

@@ -14,6 +14,7 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
 | New deck, quick/text-only | Python `office_oxide.PptxWriter` |
 | Read any deck's text | Python `office_oxide.Document.open(p).to_markdown()` |
 | Text-only edit on existing deck | unzip → edit `ppt/slides/slideN.xml` (`a:t` elements) with `lxml` → rezip |
+| Style edit on existing deck (color, font, size, position) | unzip → edit `a:rPr` / `a:xfrm` in `ppt/slides/slideN.xml` with `lxml` → rezip |
 | Render check (page count, content) | Gotenberg `/forms/libreoffice/convert` (pptx→PDF) + `pdfplumber` |
 | Validation | `python /opt/docgen/scripts/validate.py <file>` |
 
@@ -23,11 +24,14 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
    User's choice wins; otherwise default to `professional-blue` and say so.
 2. Build with `pptxgenjs`: apply the theme tokens to `defineSlideMaster`
    (colors, fonts, background) and to every text/chart element.
-   **Never** hardcode colors that are not in the theme tokens.
+   Do not invent colors outside the theme tokens on your own. If the user
+   explicitly asks for a color, font, size or position, apply exactly that
+   at the requested scope (QWEN.md › Themes) — that overrides this rule.
 3. Anti-AI design rules (hard requirements):
    - No accent lines or bars under titles.
    - Max **6 short bullets** per slide; one idea per slide.
-   - Max **2 font families** (theme `fonts.heading` + `fonts.body`).
+   - Max **2 font families** (theme `fonts.heading` + `fonts.body`), unless
+     the user explicitly names another font.
    - Consistent template: title zone top, content zone, footer with page
      number on every slide.
    - Whitespace over decoration; no clip-art, no random icons.
@@ -64,7 +68,12 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
    then validate → readback → Gotenberg render (page count == slide count).
 
 Use a custom `pptxgenjs` script instead whenever the deck needs charts,
-images, tables, or non-standard layouts.
+images, tables, or non-standard layouts, or the user asks for specific
+colors, fonts, sizes or positions (the builder only applies theme tokens).
+In pptxgenjs every `addText` takes `x`, `y`, `w`, `h` (inches), `color`
+(hex, no `#`), `fontFace`, `fontSize` (pt), `bold`, `align`; to style part
+of a line in a non-placeholder text box, pass a run array:
+`s.addText([{ text: "Normal " }, { text: "kırmızı", options: { color: "FF0000" } }], { x: 1, y: 2, w: 8, h: 0.6 })`.
 
 ## Creation workflow (pptxgenjs)
 
@@ -116,15 +125,36 @@ images, tables, or non-standard layouts.
      elements inside `a:p` paragraphs (namespace `a` =
      `http://schemas.openxmlformats.org/drawingml/2006/main`).
    - rezip: `cd /workspace/scratch/deck_x && zip -r ../new.pptx . -x ".*"`
-3. **Layout/theme/structural changes:** regenerating is more reliable than
+3. **Targeted style changes** ("bu başlığı kırmızı yap", "3. slayttaki
+   metin 20 punto olsun", "logoyu sağa al"): same unzip/rezip as step 2,
+   but change only the matching shape/runs — do NOT rebuild the deck.
+   - Find the `p:sp` whose `a:t` text matches; edit each `a:r/a:rPr`
+     (create it as the run's first child if missing):
+     - size: attribute `sz` in 1/100 pt (`sz="2000"` = 20 pt)
+     - color: child `<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>`
+       (replace any existing fill child)
+     - font: child `<a:latin typeface="Arial"/>`
+     - bold/italic: attributes `b="1"` / `i="1"`
+     - child order inside `a:rPr`: `a:ln`, fill, effects, `a:highlight`,
+       then `a:latin`, `a:ea`, `a:cs` — fill always before `a:latin`.
+   - Alignment: `algn="ctr"|"l"|"r"` on that paragraph's `a:pPr`.
+   - Position/size: `p:spPr/a:xfrm` → `a:off x= y=` and `a:ext cx= cy=`
+     in EMU (914400 EMU = 1 inch). If the shape has no `a:xfrm` it inherits
+     from the layout — add one as the first child of `p:spPr`.
+   - If the target is only part of a run, split the run (copy its `a:rPr`)
+     and style only the target part.
+   - An XSD order mistake shows up in `validate.py` as "This element is not
+     expected" — fix the order and re-run.
+4. **Layout/theme/structural changes:** regenerating is more reliable than
    patching — extract the deck's text content, then rebuild the deck with
    pptxgenjs using the theme. Do this when many slides change or the user
    asks for a restyle.
-4. QA: validate → readback → render.
+5. QA: validate → readback → render.
 
 ## Quality rules
 
 - Title slide: deck title + subtitle, nothing else.
 - Section dividers for decks longer than ~8 slides.
-- Charts: use pptxgenjs `addChart` with theme colors; one chart per slide.
+- Charts: use pptxgenjs `addChart` with theme colors (unless the user
+  specifies colors); one chart per slide.
 - Never deliver a deck where a slide exceeds 6 bullets.

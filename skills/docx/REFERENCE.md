@@ -62,6 +62,16 @@ Packer.toBuffer(doc).then(buf => require("fs").writeFileSync("out.docx", buf));
 
 Notes:
 - Sizes are half-points (22 = 11pt). Margins in twips (1440 = 1 inch).
+- Per-element styling (user-requested color/font/size/alignment):
+  ```js
+  new Paragraph({ alignment: AlignmentType.CENTER, children: [
+    new TextRun({ text: "Normal " }),
+    new TextRun({ text: "kırmızı", color: "FF0000", font: "Arial", size: 28, bold: true }),
+  ] });
+  new TableCell({ shading: { type: ShadingType.CLEAR, color: "auto", fill: "006400" },
+    children: [new Paragraph({ children: [new TextRun({ text: "Başlık", color: "FFFFFF" })] })] });
+  ```
+  (`ShadingType` is also imported from `docx`; colors are hex without `#`.)
 - `Packer.toBuffer` + `fs.write` keeps everything in the container.
 
 ## OOXML anatomy (docx = zip)

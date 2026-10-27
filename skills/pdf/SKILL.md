@@ -26,6 +26,10 @@ description: Create and process PDF files — generate from HTML, merge, split, 
      `<style>` block, or reference it as a same-folder file when converting
      (Gotenberg serves relative paths next to the HTML).
    - A4 page setup, print-safe typography (see REFERENCE.md §print-CSS).
+   - User-requested styling for specific content (color, font, size,
+     position): put it on exactly that element — inline `style="…"` or a
+     class used only there — so it overrides the theme preset without
+     changing anything else.
    - Real content only — no placeholder text.
 2. **Convert:**
    ```bash
