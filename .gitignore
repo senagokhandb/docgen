@@ -6,6 +6,9 @@ data/**
 !data/*/
 !data/*/.gitkeep
 
+# eval koşu çıktıları (agent çalışma alanları, ham çıktılar, raporlar)
+evals/runs/
+
 # node
 node_modules/
 

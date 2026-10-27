@@ -56,15 +56,40 @@ SAME file with only that change. Do not rebuild it from its text (that loses
 styles, images, charts, links, layout). Rebuilding is allowed only when the
 user explicitly asks for it; then say what may change.
 
+**Re-rendering from the file's own source is not rebuilding.** The source is
+the file it was built from (the HTML a PDF was rendered from, a build
+script): uploaded by the user, or — in the chat UI — in
+`/workspace/previous/<n>/`, the read-only scratch of message n, where it
+belongs only to the file message n delivered. When the source is available
+and the change cannot be made in the file itself (PDF: color/font, new
+tables or sections, longer text that must reflow), change the source and
+re-render it — but first prove it is the source: rendered unchanged,
+`diff_check.py <file> <render>` must PASS with no scope. If it does not,
+the file changed after it was built: do not use that source.
+
 1. **Locate the target** — `python /opt/docgen/scripts/find_target.py <file> "<text>"
    [--section/--slide/--page/--sheet ...]`. Exit 3 = several matches:
    narrow it with the context the user gave (section, slide, table row,
    page). If it is still ambiguous, **do not guess and do not write a file**:
    list the candidates in your answer and ask which one is meant.
+
+   **Several matches — decide by the wording of the request, not by what
+   seems convenient:**
+   - The user says *all / every / everywhere* ("tüm", "bütün", "hepsi",
+     "her yerde", "her iki", "... yazan yerleri") → change every match and
+     report how many.
+   - Otherwise (a singular or definite target: "'risk' kelimesini",
+     "Sonuç başlığını", "Bütçe slaytının başlığını", "Başarısız olan
+     servisin notunu", "'%11' ifadesini") and the request's own context
+     does not single out one match → **ambiguous**: write NO file, list the
+     candidates with their location, ask which one. Do not apply it to all
+     of them, and do not pick one with an "assumption" — both are wrong
+     answers here.
 2. **Edit with the docgen helpers** (see the skill): `docgen.docx`,
    `docgen.pptx`, `docgen.xlsx`, `docgen.theme` (open with
    `docgen.package.Package`, save to `/workspace/outputs/`), `pdf_text.py`
-   / `pdf_pages.py` for PDF, `xlsx_struct.py` for rows/columns/sorting.
+   / `pdf_insert.py` / `pdf_pages.py` for PDF, `xlsx_struct.py` for
+   rows/columns/sorting.
 3. **Verify** (see *Verification loop*): `validate.py --baseline <original>`,
    `diff_check.py <original> <result>` with the scope the user asked for,
    `xlsx_recalc.py` after any value/formula change, `readback.py --format`
@@ -81,6 +106,21 @@ user explicitly asks for it; then say what may change.
 - `NotSupported` → say exactly what cannot be done and why; never replace it
   with a broader change (e.g. restyling the whole document instead of one
   paragraph) without the user's consent.
+- **A refusal is final for this run.** When a helper/script refuses
+  (`REFUSED`, `NotSupported`, "does not fit", "ask the user") or the skill
+  lists the request under *Refuse honestly*, write NO file: explain why and
+  offer the options, so the user can decide. Do not write your own
+  workaround instead: no custom pdfium/pixel/glyph code, no splitting text
+  onto new pages, no swapping content between pages, no shrinking fonts —
+  even if it would "probably" be what the user wants. An "assumption" does
+  not replace the user's decision here.
+- **Scanned / image-only documents:** do not OCR them and never edit the
+  image (painting over or re-drawing text in a scan alters a record) —
+  explain that the file has no text layer and that the source file or an
+  OCR'd version is needed.
+- **Use only what is installed.** Never download or install software or
+  packages (`apt`, `apt-get download`, `dpkg`, `pip install`, `npm install`,
+  fetching binaries with `curl`). If a needed tool is missing, say so.
 - "Do not change anything" → deliver the file unchanged (byte-identical).
 - If only part of a multi-part request can be done, do that part and state
   clearly which part was not done and why.
@@ -119,7 +159,7 @@ position on exactly the paragraph / run / cell / slide / shape the user means:
 | DOCX | docx-js `TextRun` (`color`, `font`, `size` in half-points), `Paragraph` (`alignment`, `spacing`, `indent`), `TableCell` (`shading`) | `docgen.docx`: `set_run_props`, `set_paragraph_props`, `set_style_props` (all headings / all body), `set_cell_shading` |
 | PPTX | pptxgenjs `addText` (`x`,`y`,`w`,`h`, `color`, `fontFace`, `fontSize`, `align`; run arrays for part of a line) | `docgen.pptx`: `set_run_props`, `set_paragraph_props`, `set_geometry`, `scale`, `set_fill`, `set_background` |
 | XLSX | openpyxl `Font`, `PatternFill`, `Alignment`, `number_format` | `docgen.xlsx`: `set_style`, `add_conditional_format` |
-| PDF | inline CSS on that element (`style="color:#C00000"`) | text content only (`pdf_text.py`); color/font changes of existing PDF text are not supported |
+| PDF | inline CSS on that element (`style="color:#C00000"`) | text content only (`pdf_text.py`); color/font changes of existing PDF text are not supported — with the source available, style it there and re-render |
 
 - **office_oxide cannot set font color, font family or size**, and its
   `replace_text` replaces EVERY occurrence, including inside longer words
@@ -155,7 +195,11 @@ reporting done:
    cached results; reports new errors). For new workbooks use it too.
 4. **Read-back** — `python /opt/docgen/scripts/readback.py <file> [--format]`
    (`--format` shows colors/fonts/sizes/positions to confirm style edits).
-5. **Render** — office→PDF via Gotenberg (must succeed without errors).
+5. **Render** — `python /opt/docgen/scripts/render_check.py <file>` (must
+   PASS): LibreOffice (via Gotenberg) has to lay the file out into real pages;
+   for decks the page count must equal the visible slides. Do not hand-roll
+   `curl ... -o x.pdf && ls x.pdf` for this — curl without `-f` saves an
+   HTTP error as "x.pdf" and exits 0.
 
 If any step fails: fix the file and re-run the failed step. Maximum **3 fix
 iterations** — after that, stop and report the remaining issues honestly
@@ -167,17 +211,23 @@ instead of claiming success.
 
 Base URL in env var `GOTENBERG_URL` (default `http://gotenberg:3000`).
 
+Always call Gotenberg with `curl --fail-with-body`: an HTTP error then makes curl exit
+non-zero instead of silently saving the error text as the output file (the
+body is still written, so you can read Gotenberg's message).
+
 ```bash
 # HTML → PDF  (Gotenberg 8 chromium motoru dosyayı `index.html` olarak ister)
-curl -s -F "files=@page.html;filename=index.html" "$GOTENBERG_URL/forms/chromium/convert/html" -o out.pdf
+curl -s --fail-with-body -F "files=@page.html;filename=index.html" "$GOTENBERG_URL/forms/chromium/convert/html" -o out.pdf
 
-# Office → PDF (docx/pptx/xlsx)
-curl -s -F "files=@doc.docx" "$GOTENBERG_URL/forms/libreoffice/convert" -o out.pdf
+# Office → PDF (docx/pptx/xlsx) as a deliverable; for the render CHECK use render_check.py
+curl -s --fail-with-body -F "files=@doc.docx" "$GOTENBERG_URL/forms/libreoffice/convert" -o out.pdf
 
 # PDF → PDF: merge / watermark / optimize   (page delete/move/insert: scripts/pdf_pages.py)
-curl -s -F "files=@a.pdf" -F "files=@b.pdf" "$GOTENBERG_URL/forms/pdfengines/merge" -o merged.pdf
-curl -s -F "files=@a.pdf" -F "watermarkSource=text" -F "watermarkExpression=TASLAK" \
+curl -s --fail-with-body -F "files=@a.pdf" -F "files=@b.pdf" "$GOTENBERG_URL/forms/pdfengines/merge" -o merged.pdf
+curl -s --fail-with-body -F "files=@a.pdf" -F "watermarkSource=text" -F "watermarkExpression=TASLAK" \
      "$GOTENBERG_URL/forms/pdfengines/watermark" -o w.pdf
+# Turkish characters (İ, ş, ğ...) in a watermark: the text source drops them —
+# use the PDF-source recipe in skills/pdf/REFERENCE.md §watermark
 ```
 
 There is no `crop` route. If a Gotenberg request returns 4xx/5xx, check the
@@ -201,7 +251,7 @@ request fields and the response body before retrying.
   row/column/sort operations (`xlsx_struct.py`), `.doc/.xls/.ppt` conversion
   (`convert_legacy.py`).
 - **pdfplumber / pypdfium2** — PDF reading; page operations and in-place
-  text edits (`pdf_pages.py`, `pdf_text.py`).
+  text edits (`pdf_pages.py`, `pdf_text.py`, `pdf_insert.py`).
 - **lxml** — XML parsing / XSD validation.
 - **Node:** `docx` (docx-js) and `pptxgenjs` — full-control creation of NEW
   files (`NODE_PATH` set; run with `node /workspace/scratch/xxx.js`).
@@ -232,10 +282,10 @@ request fields and the response body before retrying.
 - Where is it? → `find_target.py`
 - Edit uploaded DOCX/PPTX/XLSX → `docgen.docx` / `docgen.pptx` / `docgen.xlsx` (+ `docgen.theme`)
 - XLSX rows/columns/sort → `xlsx_struct.py`; results → `xlsx_recalc.py`
-- Edit uploaded PDF → `pdf_text.py` (text), `pdf_pages.py` (pages)
+- Edit uploaded PDF → `pdf_text.py` (text), `pdf_insert.py` (new paragraphs), `pdf_pages.py` (pages)
 - .doc/.xls/.ppt → `convert_legacy.py`, then edit the converted file
 - New DOCX → docx-js; new PPTX → pptxgenjs; new XLSX → openpyxl/XlsxWriter + `xlsx_recalc.py`
 - New document on a user template → `docgen.docx/pptx.start_from_template` + python-docx/python-pptx
 - PDF create → self-contained HTML + theme CSS → Gotenberg Chromium
-- Office→PDF render → Gotenberg LibreOffice
-- Checks → `validate.py [--baseline]`, `diff_check.py`, `readback.py [--format]`
+- Office→PDF deliverable → Gotenberg LibreOffice (`curl --fail-with-body`)
+- Checks → `validate.py [--baseline]`, `diff_check.py`, `readback.py [--format]`, `render_check.py`

@@ -17,7 +17,7 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
 | New deck, full control (charts, images, custom layouts) | Node `pptxgenjs` script in `/workspace/scratch/` |
 | New deck on a **user template** | `docgen.pptx.start_from_template` + python-pptx layouts |
 | .ppt / .odp input | `convert_legacy.py` first, then edit the .pptx |
-| Render check (page count, content) | Gotenberg `/forms/libreoffice/convert` (pptx→PDF) + `pdfplumber` |
+| Render check (pages == visible slides, content) | `python /opt/docgen/scripts/render_check.py <file>` |
 | Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
 pptxgenjs and office_oxide cannot open an existing deck: never "edit" an
@@ -40,8 +40,8 @@ uploaded deck by rebuilding it with them.
    - Consistent template: title zone top, content zone, footer with page
      number on every slide.
    - Whitespace over decoration; no clip-art, no random icons.
-4. Verify: validate → readback (all slide titles/text present) → Gotenberg
-   render (PDF page count == slide count).
+4. Verify: validate → readback (all slide titles/text present) →
+   `render_check.py` (PDF page count == visible slides).
 
 ## Quick themed deck (recommended for text-only decks)
 
@@ -70,7 +70,7 @@ uploaded deck by rebuilding it with them.
    ```
    python /opt/docgen/scripts/repair_pptx.py /workspace/outputs/sunum.pptx
    ```
-   then validate → readback → Gotenberg render (page count == slide count).
+   then validate → readback → `render_check.py` (page count == visible slides).
 
 Use a custom `pptxgenjs` script (new decks only) whenever the deck needs charts,
 images, tables, or non-standard layouts, or the user asks for specific
@@ -118,8 +118,8 @@ of a line in a non-placeholder text box, pass a run array:
 3. Repair: `python /opt/docgen/scripts/repair_pptx.py <out.pptx>`
    (fixes known pptxgenjs XML quirks: element order in presentation.xml,
    split merged bullet paragraphs. Idempotent — "clean" when nothing to fix.)
-4. QA loop: validate.py → readback.py → Gotenberg render + `pdfplumber`
-   page-count check.
+4. QA loop: validate.py → readback.py → render_check.py (page count ==
+   visible slides).
 
 ## Editing workflow (uploaded deck)
 
@@ -163,6 +163,7 @@ SmartArt, images, hidden slides, links and notes must survive untouched.
    python /opt/docgen/scripts/diff_check.py SRC OUT --allow-slide 2 --format-only \
           --record /workspace/outputs/manifest.json
    python /opt/docgen/scripts/readback.py OUT --format
+   python /opt/docgen/scripts/render_check.py OUT
    ```
    Scope flags: `--allow-slide N`, `--allow-notes N`, `--allow-text T`,
    `--allow-structure` (slide add/delete/move), `--allow-theme`;
@@ -187,7 +188,7 @@ prs.save(out)
 ```
 Keep the template's example slides instead (`keep_slides=True`) when the user
 wants to fill them; then edit them with `docgen.pptx` as above. Verify with
-`validate.py out --baseline <template>` and a render.
+`validate.py out --baseline <template>` and `render_check.py out`.
 
 ## Quality rules
 

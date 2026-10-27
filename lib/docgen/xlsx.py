@@ -216,7 +216,7 @@ def get(pkg, target):
     if t == "inlineStr":
         return _si_text(c.find(s("is"))), formula
     v = c.findtext(s("v"))
-    if v is None:
+    if v is None or (v == "" and t not in ("str", "s")):
         return None, formula
     if t == "s":
         return shared_strings(pkg)[int(v)], formula

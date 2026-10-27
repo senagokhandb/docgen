@@ -158,8 +158,10 @@ Rules for hand edits:
 
 ## Render QA details
 
-- Gotenberg pptx→PDF: each slide = one PDF page (16:9 decks may letterbox).
-- `pdfplumber`: `len(doc.pages)` == slide count; `extract_text()` on each
-  page to confirm titles.
-- If a slide's text is missing from the PDF text layer, the render likely
-  failed on that slide — inspect the Gotenberg response body.
+- `python /opt/docgen/scripts/render_check.py deck.pptx` does the render QA:
+  Gotenberg must answer 200 with a real PDF, PDF pages == visible slides
+  (hidden slides are not exported), and text present in the deck must be
+  present in the PDF. On FAIL it prints Gotenberg's own error message.
+- Each slide = one PDF page (16:9 decks may letterbox).
+- Titles: `--expect-text "Pazar Görünümü"` (repeatable); keep the PDF for a
+  closer look with `-o /workspace/scratch/deck.pdf`.

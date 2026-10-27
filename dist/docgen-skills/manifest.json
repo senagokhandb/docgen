@@ -1,0 +1,32 @@
+{
+  "docgen": {
+    "version": "1.1.0",
+    "updated": "2026-10-27"
+  },
+  "skills": {
+    "docx": {
+      "skillId": "docx",
+      "description": "Create, edit in place (docgen.docx) and validate Word documents; build on user templates",
+      "enabled": true,
+      "tier": "core"
+    },
+    "pptx": {
+      "skillId": "pptx",
+      "description": "Create decks with the theme system, edit uploaded decks in place (docgen.pptx), build on user templates",
+      "enabled": true,
+      "tier": "core"
+    },
+    "xlsx": {
+      "skillId": "xlsx",
+      "description": "Create and edit workbooks in place (docgen.xlsx, xlsx_struct) with LibreOffice recalculation",
+      "enabled": true,
+      "tier": "core"
+    },
+    "pdf": {
+      "skillId": "pdf",
+      "description": "Create PDFs via Gotenberg; edit text and pages of existing PDFs in place (pdf_text, pdf_pages)",
+      "enabled": true,
+      "tier": "core"
+    }
+  }
+}

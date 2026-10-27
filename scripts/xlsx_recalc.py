@@ -51,6 +51,13 @@ def _num(v):
         return v
 
 
+def _same(a, b):
+    x, y = _num(a), _num(b)
+    if isinstance(x, float) and isinstance(y, float):
+        return abs(x - y) <= 1e-9 * max(1.0, abs(x), abs(y))
+    return a == b
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file")
@@ -77,6 +84,8 @@ def main():
             ref = c.get("r")
             old_t, old_v = c.get("t"), c.findtext(S("v"))
             t, v = calc.get((name, ref), ("str", ""))
+            if old_v is not None and (old_t or "n") == (t or "n") and _same(old_v, v):
+                continue  # result unchanged: keep the original bytes
             for el in c.findall(S("v")):
                 c.remove(el)
             c.attrib.pop("t", None)

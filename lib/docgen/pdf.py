@@ -130,9 +130,32 @@ def _style_of(name):
             (True, True): "BoldItalic"}[(bold, italic)]
 
 
+# metric-compatible substitutes (same glyph widths) for fonts that PDFs often
+# reference without embedding, or that cannot be redistributed
+FONT_SUBSTITUTES = {"helvetica": "LiberationSans", "arial": "LiberationSans", "arialmt": "LiberationSans",
+                    "times": "LiberationSerif", "timesroman": "LiberationSerif", "timesnewroman": "LiberationSerif",
+                    "timesnewromanpsmt": "LiberationSerif", "courier": "LiberationMono", "couriernew": "LiberationMono",
+                    "calibri": "Carlito", "cambria": "Caladea"}
+
+
+def font_substitute(pdf_font_name):
+    family = re.split(r"[-,]", base_font(pdf_font_name))[0].replace(" ", "").lower()
+    return FONT_SUBSTITUTES.get(family)
+
+
 def find_font_file(pdf_font_name):
-    """Full font file for a PDF font name (e.g. 'BAAAAA+Caladea-Bold'), same
-    family only. Returns None when the family is not installed."""
+    """Full font file for a PDF font name (e.g. 'BAAAAA+Caladea-Bold'): the
+    same family, or its metric-compatible substitute (Helvetica -> Liberation
+    Sans, Calibri -> Carlito, ...). None when neither is installed."""
+    path = _font_file(pdf_font_name)
+    sub = font_substitute(pdf_font_name)
+    if path is None and sub:
+        style = _style_of(base_font(pdf_font_name))
+        path = _font_file(f"{sub}-{style}")
+    return path
+
+
+def _font_file(pdf_font_name):
     base = base_font(pdf_font_name)
     family = re.split(r"[-,]", base)[0].replace(" ", "")
     style = _style_of(base)
@@ -328,6 +351,41 @@ def replace_text(src, dst, old, new, *, page=None, occurrence=None, band=None, n
         raise NotSupported("characters of the new text are not in the embedded font subset"
                            if not chars_ok else "line mixes formatting; in-place edit refused")
 
+    # 1b) one table cell / segment of a multi-column line: redraw only that
+    #     segment with the full font file, keeping the column alignment
+    all_segs = _segments(line_objs[0], f0.size) if m.first == m.last else []
+    cell = [sg for sg in all_segs if _norm(old) in _norm(_seg_text(sg))]
+    if len(all_segs) > 1 and len(cell) == 1 and strategy in ("auto", "redraw"):
+        seg = cell[0]
+        x0, x1 = seg[0]["box"][0], seg[-1]["box"][2]
+        chars = [c for c in block[0].chars if c["text"].strip() and c["x0"] >= x0 - 0.5 and c["x1"] <= x1 + 0.5]
+        sig = collections.Counter((c["fontname"], round(c["size"], 1), _rgb(c.get("non_stroking_color"))) for c in chars)
+        if len(sig) != 1:
+            raise NotSupported("the cell mixes formatting; redrawing it would lose that formatting")
+        (font, size, color), _ = sig.most_common(1)[0]
+        font_file = find_font_file(font)
+        if not font_file:
+            raise NotSupported(f"font family of {base_font(font)!r} is not installed; cannot redraw the cell")
+        new_t = _norm(_seg_text(seg)).replace(_norm(old), new, 1)
+        w_new = _width(font_file, size)(new_t)
+        i = all_segs.index(seg)
+        left = all_segs[i - 1][-1]["box"][2] + size * 0.5 if i > 0 else 0
+        right = all_segs[i + 1][0]["box"][0] - size * 0.5 if i + 1 < len(all_segs) else pwidth - f0.x0
+        align = _column_align(objs, page_lines, seg, height, size)
+        bx, by = seg[0]["origin"]
+        nx = {"right": bx + (x1 - x0) - w_new, "center": bx + ((x1 - x0) - w_new) / 2}.get(align, bx)
+        if nx < left or nx + w_new > right:
+            raise NotSupported("the new cell text does not fit in its column")
+        for o in seg:
+            pg.remove_obj(o["obj"])
+        keep = _draw(pdf, pg, font_file, size, color, [(nx, by, new_t)])
+        report.update(strategy="redraw-cell", font_file=font_file, segment_after=new_t, align=align,
+                      font_substitute=font_substitute(font) if base_font(font).split("-")[0].lower() not in
+                      font_file.lower() else None)
+        result = _finish(pdf, pg, src, dst, m, new_t, report, untouched(block))
+        del keep
+        return result
+
     # 2) redraw the paragraph with the full font file of the same family
     if any(len(_segments(lo, f0.size)) > 1 for lo in line_objs):
         raise NotSupported("the line is a table row / has separate columns; target one cell "
@@ -353,6 +411,8 @@ def replace_text(src, dst, old, new, *, page=None, occurrence=None, band=None, n
                 break
     pitch = pitch or f0.size * 1.2
     col_right = max((l.x1 for l in page_lines if abs(l.x0 - f0.x0) < 2 and not l.band), default=pwidth - f0.x0)
+    if len(para) == 1:  # a single line (heading, caption) may grow up to the right margin
+        col_right = max(col_right, pwidth - f0.x0)
     text = " ".join([joined_new(block, m, new)] + [_norm(l.text) for l in para[len(block):]])
     wrapped = _wrap(text, width, col_right - f0.x0 + 0.5)
     if f0.band and len(wrapped) > 1:
@@ -367,22 +427,33 @@ def replace_text(src, dst, old, new, *, page=None, occurrence=None, band=None, n
     for lo in para_objs:
         for o in lo:
             pg.remove_obj(o["obj"])
+    keep = _draw(pdf, pg, font_file, f0.size, f0.color, [(base_x, base_y - i * pitch, t) for i, t in enumerate(wrapped)])
+    report.update(strategy="redraw", font_file=font_file, lines_after=wrapped,
+                  font_substitute=font_substitute(f0.font) if base_font(f0.font).split("-")[0].lower() not in
+                  font_file.lower() else None)
+    result = _finish(pdf, pg, src, dst, m, text, report, untouched(para))
+    del keep
+    return result
+
+
+def _draw(pdf, pg, font_file, size, color, items):
+    """Insert text objects [(x, baseline_y, text)] using a full TrueType font.
+    Returns buffers that must stay alive until the document is saved."""
     with open(font_file, "rb") as fh:
         data = fh.read()
     fbuf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
     font = raw.FPDFText_LoadFont(pdf.raw, fbuf, len(data), raw.FPDF_FONT_TRUETYPE, True)
-    r, g, b = f0.color
+    r, g, b = color
     keep = [fbuf]
-    for i, line_text in enumerate(wrapped):
-        t = raw.FPDFPageObj_CreateTextObj(pdf.raw, font, ctypes.c_float(f0.size))
-        _buf, ptr = _wide(line_text)
+    for x, y, text in items:
+        t = raw.FPDFPageObj_CreateTextObj(pdf.raw, font, ctypes.c_float(size))
+        _buf, ptr = _wide(text)
         keep.append(_buf)
         raw.FPDFText_SetText(t, ptr)
         raw.FPDFPageObj_SetFillColor(t, r, g, b, 255)
-        raw.FPDFPageObj_Transform(t, 1, 0, 0, 1, base_x, base_y - i * pitch)
+        raw.FPDFPageObj_Transform(t, 1, 0, 0, 1, x, y)
         raw.FPDFPage_InsertObject(pg.raw, t)
-    report.update(strategy="redraw", font_file=font_file, lines_after=wrapped)
-    return _finish(pdf, pg, src, dst, m, text, report, untouched(para))
+    return keep
 
 
 def joined_new(block, m, new):
@@ -428,6 +499,74 @@ def _finish(pdf, pg, src, dst, m, expected, report, untouched=()):
     shutil.move(tmp, dst)
     report["verified"] = True
     return report
+
+
+def insert_paragraphs(src, dst, after, paragraphs, *, page=None, near=None):
+    """Add paragraphs right below the line containing ``after``, in the body
+    font, size and color of the page and inside the text column. No reflow:
+    if they do not fit before the next block / the footer band the edit is
+    refused (ask the user where the text should go instead)."""
+    ms = find(src, after, page=page, near=near)
+    if not ms:
+        raise NotFound(f"{after!r} not found")
+    if len(ms) > 1:
+        raise Ambiguous(f"{after!r}", ms)
+    m = ms[0]
+    page_lines = lines(src)[m.page - 1]
+    anchor = m._lines[m.last]
+    body = [l for l in page_lines if not l.band and not l.mixed]
+    style = collections.Counter((l.font, l.size, l.color) for l in body).most_common(1)[0][0]
+    font_name, size, color = style
+    font_file = find_font_file(font_name)
+    if not font_file:
+        raise NotSupported(f"font family of {base_font(font_name)!r} is not installed")
+    pdf = pdfium.PdfDocument(src)
+    pg = pdf[m.page - 1]
+    height, pwidth = pg.get_height(), pg.get_width()
+    left = min(l.x0 for l in body)
+    right = max(l.x1 for l in body if abs(l.x0 - left) < 2)
+    if right - left < pwidth * 0.4:
+        right = pwidth - left
+    tops = sorted(l.top for l in body if abs(l.size - size) < 0.2)
+    gaps = sorted(b - a for a, b in zip(tops, tops[1:]) if 0 < b - a < size * 1.6)
+    pitch = gaps[len(gaps) // 2] if gaps else size * 1.2
+    width = _width(font_file, size)
+    anchor_objs = _objs_for_line(_text_objects(pg), anchor, height)
+    y = (anchor_objs[0]["origin"][1] if anchor_objs else height - anchor.bottom) - pitch * 1.9
+    items, para_last_y = [], []
+    for i, ptext in enumerate(paragraphs):
+        for line in _wrap(_norm(ptext), width, right - left):
+            items.append((left, y, line))
+            y -= pitch
+        para_last_y.append(items[-1][1])
+        y -= pitch * 0.9
+    below = [l for l in page_lines if l.top > anchor.bottom + 0.5 and not l.band]
+    floor = (height - below[0].top + 2) if below else height * BAND + size
+    if items and items[-1][1] < floor:
+        # same unit for both numbers: line pitches, paragraph gaps included
+        need = round((items[0][1] - items[-1][1]) / pitch) + 1
+        room = max(int((items[0][1] - floor) // pitch) + 1, 0) if items[0][1] > floor else 0
+        fit = sum(1 for ly in para_last_y if ly >= floor)
+        raise NotSupported(f"the {len(paragraphs)} paragraphs need about {need} lines of space (paragraph gaps "
+                           f"included) but only about {room} are free on page {m.page} before the next "
+                           f"block/footer — {fit} of {len(paragraphs)} would fit. No reflow: write no file, do "
+                           f"not split, shrink or move text yourself; ask the user where the text should go")
+    keep = _draw(pdf, pg, font_file, size, color, items)
+    pg.gen_content()
+    fd, tmp = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    pdf.save(tmp)
+    del keep
+    before, after_t = page_texts(src), page_texts(tmp)
+    others = [i + 1 for i, (a_, b_) in enumerate(zip(before, after_t)) if a_ != b_ and i + 1 != m.page]
+    lost = [l.text for l in page_lines if l.text not in after_t[m.page - 1].split("\n")]
+    flat = lambda s: re.sub(r"\s", "", s)
+    missing = [p[:30] for p in paragraphs if flat(_norm(p))[:40] not in flat(after_t[m.page - 1])]
+    if others or lost or missing or len(before) != len(after_t):
+        raise DocgenError(f"verification failed: pages {others} changed, lost lines {lost[:2]}, missing {missing[:2]}")
+    shutil.move(tmp, dst)
+    return {"page": m.page, "after": anchor.text, "lines_added": len(items), "font_file": font_file,
+            "font": base_font(font_name), "size": size, "verified": True}
 
 
 def renumber(src, dst, total=None):

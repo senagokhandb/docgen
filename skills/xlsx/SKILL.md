@@ -19,7 +19,7 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
 | New workbook with full styling, charts, validation | Python `openpyxl` (new files only) |
 | Fill a **user template** (.xltx/.xlsx) | `Package(template).as_document()` + `docgen.xlsx` |
 | .xls / .ods input | `convert_legacy.py` first |
-| Render check | Gotenberg `/forms/libreoffice/convert` (xlsx→PDF) |
+| Render check (LibreOffice lays it out into pages) | `python /opt/docgen/scripts/render_check.py <file>` |
 | Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
 > openpyxl `load_workbook` → `save` on an UPLOADED file drops every cached
@@ -44,7 +44,7 @@ description: Create and edit Excel (.xlsx) workbooks with data, formulas and for
    wb.save("/workspace/outputs/butce.xlsx")
    ```
 3. QA: `validate.py` → `xlsx_recalc.py <file>` (fills results, reports
-   `#REF!`/`#DIV/0!`…; must PASS) → `readback.py`.
+   `#REF!`/`#DIV/0!`…; must PASS) → `readback.py` → `render_check.py`.
 
 ## Editing workflow (uploaded workbook)
 
@@ -80,6 +80,7 @@ validations, charts, images, names and external links must survive.
    python /opt/docgen/scripts/validate.py OUT --baseline SRC
    python /opt/docgen/scripts/diff_check.py SRC OUT --allow-cell "Satışlar!E2" --allow-recalc \
           --record /workspace/outputs/manifest.json
+   python /opt/docgen/scripts/render_check.py OUT
    ```
    Scope flags: `--allow-cell 'Sheet!A1:C9'`, `--allow-sheet S`,
    `--allow-recalc` (results of dependent formulas), `--allow-structure`
@@ -97,7 +98,7 @@ X.set_value(pkg, "Teklif!B3", "ACME Ltd")
 pkg.save("/workspace/outputs/teklif-acme.xlsx")
 ```
 Logo, merged cells, styles and formulas of the template stay as they are;
-then `xlsx_recalc.py` and `validate.py --baseline <template>`.
+then `xlsx_recalc.py`, `validate.py --baseline <template>` and `render_check.py`.
 
 ## Formula rules (critical)
 

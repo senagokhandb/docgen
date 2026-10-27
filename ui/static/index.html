@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DOCGEN</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="logo">D</span><span>DOCGEN</span></div>
+    <button type="button" class="new-chat" id="newChat"></button>
+    <nav class="sessions" id="sessions" aria-label="Sohbetler"></nav>
+    <div class="health" id="health"></div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="chat" id="chat">
+    <header class="chat-head">
+      <button type="button" class="icon-btn only-narrow" id="menuBtn" title="Sohbetler"></button>
+      <h1 id="title">Yeni sohbet</h1>
+      <button type="button" class="ghost-btn" id="filesBtn" hidden></button>
+    </header>
+    <div class="banner" id="banner" hidden></div>
+    <div class="messages" id="messages"></div>
+    <form class="composer" id="composer" autocomplete="off">
+      <div class="composer-box">
+        <div class="context" id="context" hidden></div>
+        <textarea id="input" rows="1" placeholder="Bir belge isteyin ya da yüklediğiniz dosyada değişiklik isteyin…"></textarea>
+        <div class="composer-row">
+          <button type="button" class="icon-btn" id="attachBtn" title="Dosya ekle (DOCX, PPTX, XLSX, PDF …)"></button>
+          <label class="confirm" title="--onay: formülün üzerine yazma, başka hücrelerin kullandığı satırı ya da köprü verilen slaytı silme gibi riskli işlemlere izin verir. Yalnızca bu mesaj için geçerlidir.">
+            <input type="checkbox" id="confirm"><span>onay</span>
+          </label>
+          <span class="hint">Enter gönderir · Shift+Enter yeni satır</span>
+          <button type="submit" class="send" id="sendBtn" title="Gönder"></button>
+        </div>
+      </div>
+      <input type="file" id="fileInput" multiple hidden>
+    </form>
+    <div class="drop" id="drop" hidden><div>Dosyaları buraya bırakın</div></div>
+  </main>
+
+  <div class="splitter" id="splitter" hidden></div>
+  <section class="preview" id="preview" hidden aria-label="Önizleme">
+    <header class="preview-head">
+      <select id="fileSelect" aria-label="Dosya"></select>
+      <div class="seg" id="viewToggle" hidden><button type="button" data-mode="sheet">Tablo</button><button type="button" data-mode="pdf">PDF</button></div>
+      <a class="icon-btn" id="openBtn" target="_blank" rel="noopener" title="Yeni sekmede aç"></a>
+      <a class="icon-btn" id="downloadBtn" download title="İndir"></a>
+      <button type="button" class="icon-btn" id="closePreview" title="Kapat"></button>
+    </header>
+    <div class="preview-body" id="previewBody"></div>
+    <footer class="preview-foot" id="previewFoot">Ofis dosyaları Gotenberg (LibreOffice) ile PDF'e çevrilerek gösterilir; Word / PowerPoint / Excel görünümünden küçük farklar olabilir. Asıl dosya için İndir'i kullanın.</footer>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/sheet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -17,7 +17,8 @@ description: Create, edit and validate Word (.docx) documents. Use when the user
 | New doc, full control (styles, sections, tables, headers, page numbers, per-run styling) | Node `docx` (docx-js) script in `/workspace/scratch/` |
 | New doc on a **user template** | `docgen.docx.start_from_template` + python-docx |
 | .doc / .rtf / .odt input | `convert_legacy.py` first, then edit the .docx |
-| Render check / deliverable PDF | Gotenberg `/forms/libreoffice/convert` |
+| Render check (LibreOffice lays it out into pages) | `python /opt/docgen/scripts/render_check.py <file>` |
+| Deliverable PDF of a docx | Gotenberg `/forms/libreoffice/convert` (`curl --fail-with-body`) |
 | Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
 `office_oxide.EditableDocument.replace_text` is NOT for targeted edits: it
@@ -35,7 +36,7 @@ across run boundaries.
 3. **Full-control path:** specific styling (custom styles, page numbers,
    headers/footers, complex tables, colors/fonts/sizes on particular text)
    → Node script with the `docx` package (REFERENCE.md §docx-js).
-4. Verify: `validate.py` → `readback.py` → Gotenberg render.
+4. Verify: `validate.py` → `readback.py` → `render_check.py`.
 
 ## Editing workflow (uploaded document)
 
@@ -83,6 +84,7 @@ Never rebuild an uploaded document; change only what was asked.
    python /opt/docgen/scripts/diff_check.py SRC OUT --allow-section "Sonuç" --text-only \
           --expect-text "zorunludur" --record /workspace/outputs/manifest.json
    python /opt/docgen/scripts/readback.py OUT --format     # style edits
+   python /opt/docgen/scripts/render_check.py OUT
    ```
    Scope flags: `--allow-text`, `--allow-section`, `--allow-style ID`,
    `--allow-theme`, `--allow-part 'word/numbering.xml'`; `--text-only` for text
@@ -106,8 +108,8 @@ d.add_paragraph("Uzaktan Çalışma Politikası", style="Heading 1")
 d.add_paragraph("…", style="Normal")
 d.save(out)
 ```
-Verify with `validate.py out --baseline <template>` and readback (headers,
-footers and logo must still be there). If the template has `{{PLACEHOLDER}}`
+Verify with `validate.py out --baseline <template>`, readback (headers,
+footers and logo must still be there) and `render_check.py out`. If the template has `{{PLACEHOLDER}}`
 fields, fill them in place with `D.replace(one(D.find(pkg, "{{AD}}")), "…")`.
 
 ## Quality rules
@@ -127,4 +129,4 @@ fields, fill them in place with `D.replace(one(D.find(pkg, "{{AD}}")), "…")`.
 | `diff_check` FAIL "character format (request was text-only)" | replacement spread formatting | replace only the exact expression (`find` + `replace`) |
 | validate: error that also exists in the original | pre-existing Word quirk | always pass `--baseline <original>` for edits |
 | style change not visible | run has direct formatting overriding the style, or theme font/color | change the runs, or remove the direct formatting (`False`) |
-| Gotenberg render fails | broken zip or malformed part | rebuild with `Package.save`, never hand-zip |
+| `render_check` FAIL (Gotenberg HTTP error / no pages) | broken zip or malformed part | rebuild with `Package.save`, never hand-zip |

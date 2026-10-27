@@ -21,6 +21,14 @@ EOF
 python3 /opt/docgen/scripts/validate.py /workspace/outputs/test-finans.xlsx
 python3 /opt/docgen/scripts/readback.py /workspace/outputs/test-finans.xlsx --tables | head -12
 python3 /opt/docgen/scripts/recalc_check.py /workspace/outputs/test-finans.xlsx --expect "Miktar:10" --json
+python3 /opt/docgen/scripts/render_check.py /workspace/outputs/test-finans.xlsx --expect-text "Toplam"
+
+echo "=== RENDER CHECK: bozuk dosya FAIL vermeli ==="
+# curl -s + ls bunu geçirirdi: Gotenberg'in hata metni "PDF" olarak kaydedilir
+head -c 2000 /workspace/outputs/test-finans.xlsx > broken.xlsx
+if python3 /opt/docgen/scripts/render_check.py broken.xlsx; then
+  echo "HATA: render_check bozuk dosyayı geçirdi" >&2; exit 1
+fi
 
 echo "=== PDF: HTML -> chromium -> validate -> readback ==="
 cat > page.html <<'EOF'
