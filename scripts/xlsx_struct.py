@@ -4,7 +4,7 @@ PLACE. Every reference to the sheet is shifted the way Excel does it
 (formulas on all sheets, names/print titles, conditional formats,
 validations, tables, merged cells, hyperlinks, comments, drawing anchors,
 chart series); styles, theme and all other parts stay untouched. Cached
-formula results are then refreshed with LibreOffice (xlsx_recalc).
+formula results are then refreshed by xlsx_recalc.
 
 Usage:
     xlsx_struct.py <in.xlsx> <out.xlsx> insert-rows --sheet S --at 10 [--count 1]

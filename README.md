@@ -28,9 +28,10 @@ kullanıcı istegi ──> docker compose ──> agent (Qwen Code, non-root san
 |---|---|
 | **Ajan çekirdeği** | Qwen Code CLI v0.26.1 — istemi headless modda (`--yolo -o json`) çalıştırır; kod yazma, shell komutu, dosya okuma/yazma yetkileri tam. Headless modun gömülü "soru sorma, varsayıp bitir" cümlesi imaj derlenirken `patch_qwen_prompt.py` ile değiştirilir: her çalışma bir sohbet turudur; ajan yalnızca kullanıcının kararı olmadan güvenle ilerleyemeyeceği yerde (araç reddi, belirsiz hedef, onaysız yıkıcı değişiklik) sorar, gerisinde varsayımını söyleyip işi bitirir. |
 | **Model** | `.env` dosyasındaki OpenAI-uyumlu endpoint (Gemma). Konteyner dışı, kendi inference servisiniz |
-| **docgen kütüphanesi** | `/opt/docgen/lib/docgen` (`PYTHONPATH`) — yüklenen dosyayı **yerinde** düzenlemek için test edilmiş yapı taşları: `package`, `docx`, `pptx`, `xlsx`, `xlsx_struct`, `pdf`, `theme`, `compare`, `office`. Agent kendi script'inden çağırır. |
+| **docgen kütüphanesi** | `/opt/docgen/lib/docgen` (`PYTHONPATH`) — yüklenen dosyayı **yerinde** düzenlemek için test edilmiş yapı taşları: `package`, `docx`, `pptx`, `xlsx`, `xlsx_struct`, `calc`, `pdf`, `theme`, `compare`, `office`. Agent kendi script'inden çağırır. |
 | **Python motoru** | office_oxide (hızlı okuma, yeni dosya), python-docx / python-pptx (kullanıcı şablonundan üretim), openpyxl (yeni çalışma kitabı), pdfplumber, pypdfium2 (PDF sayfa + metin düzenleme), lxml, requests, defusedxml, Pillow |
-| **LibreOffice (headless)** | yalnızca hesap motoru ve dönüştürücü: formül sonuçlarının hesaplanması (`xlsx_recalc.py`), `.doc/.xls/.ppt` dönüşümü (`convert_legacy.py`) |
+| **Formül motoru** | IronCalc (MIT/Apache-2.0) + Formualizer (MIT/Apache-2.0, yalnızca TEXT ve AGGREGATE hücreleri) — `xlsx_recalc.py` formül sonuçlarını bunlarla hesaplar (`docgen.calc`) |
+| **LibreOffice (headless)** | `.doc/.xls/.ppt` dönüşümü (`convert_legacy.py`); IronCalc'ın açamadığı çalışma kitabında `xlsx_recalc.py` için yedek motor |
 | **Fontlar** | Gotenberg ile aynı aileler (Caladea, Carlito, Liberation, DejaVu) — PDF metni aynı fontla yeniden çizilebilsin diye |
 | **Node motoru** | docx-js (docx), pptxgenjs — yeni dosya üretimi; `NODE_PATH=/opt/docgen/node_modules` |
 | **Bilgi katmanı** | `/opt/docgen/skills/` (4 format skill + referanslar), `/opt/docgen/QWEN.md` (sistem kuralları), `/opt/docgen/themes/` (temalar + CSS + şablonlar), `/opt/docgen/schemas/` (ECMA-376 XSD seti) |
@@ -66,7 +67,7 @@ Konteyner her istekte tek seferlik çalışır (`docker compose run --rm agent`)
    c. DOĞRULAMA DÖNGÜSÜ:
         validate.py [--baseline orijinal] -> yapısal + ECMA-376 XSD (yalnızca YENİ hatalar)
         diff_check.py orijinal sonuç --allow-...  -> istenen dışında bir şey değiştiyse FAIL
-        xlsx_recalc.py -> formül sonuçlarını LibreOffice ile hesaplayıp dosyaya yazar
+        xlsx_recalc.py -> formül sonuçlarını IronCalc ile hesaplayıp dosyaya yazar
         readback.py [--format] -> içerik / biçim geri okuma
         render_check.py -> LibreOffice (Gotenberg) dosyayı sayfalara dökebiliyor mu
       Başarısız adım: düzelt + tekrar (maks. 3 tur, sonra dürüst rapor)
@@ -86,7 +87,7 @@ Görsel QA **varsayılan olarak kapalıdır**; istekte `--visual-qa` varsa
 | Ofis dosyası okuma (markdown/HTML/düz metin) | office_oxide `Document` | Python |
 | **Yüklenen DOCX/PPTX/XLSX'i yerinde düzenleme** (metin, biçim, konum, tablo, bölüm, slayt, stil, tema) | docgen kütüphanesi (`docgen.docx/pptx/xlsx/theme`) | Python |
 | XLSX satır/sütun ekle-sil, sıralama (referanslar her yerde kayar) | `docgen.xlsx_struct` / `xlsx_struct.py` | Python |
-| XLSX formül sonuçlarını hesaplayıp dosyaya yazma | `xlsx_recalc.py` (LibreOffice hesap motoru) | Python |
+| XLSX formül sonuçlarını hesaplayıp dosyaya yazma | `xlsx_recalc.py` (IronCalc + Formualizer, `docgen.calc`) | Python |
 | PDF metin (cümle, tablo hücresi, üst/alt bilgi), yeni paragraf ekleme ve sayfa düzenleme | `docgen.pdf` / `pdf_text.py`, `pdf_insert.py`, `pdf_pages.py` (pypdfium2) | Python |
 | Kullanıcı şablonundan yeni belge/deste | `start_from_template` + python-docx / python-pptx | Python |
 | `.doc/.xls/.ppt` → OOXML | `convert_legacy.py` (LibreOffice) | Python |
@@ -245,11 +246,26 @@ kalıbının yerini alır: `-f` olmadan curl, Gotenberg'in 4xx/5xx hata metnini
 - Eval'de docx/pptx/xlsx teslim eden her vakada zorunlu adım (`render`).
 
 ### 5.6 xlsx_recalc.py — formül sonuçları
-LibreOffice'i yalnızca hesap motoru olarak kullanır: kopyayı hesaplatır,
-sonuçları **orijinal paketin** formül hücrelerine önbellek değeri olarak
-yazar (başka hiçbir parça değişmez). Yeni `#REF!/#DIV/0!…` hatalarında ve
-`--expect "Sayfa!B4=20000"` tutmadığında exit 1. (`recalc_check.py`,
-LibreOffice yoksa Gotenberg üzerinden tarama yapan eski yedek yoldur.)
+Formülleri `docgen.calc` ile hesaplar, sonuçları **orijinal paketin** formül
+hücrelerine önbellek değeri olarak yazar (başka hiçbir parça değişmez).
+Motor IronCalc'tır; IronCalc'ın yanlış yaptığı TEXT biçimlerini (12,5 → "12")
+ve sahip olmadığı AGGREGATE'i Formualizer hesaplar ve sonucu bağımlı
+hücrelere geri verilir. İki motor da paketin geçici bir kopyasını okur:
+mutlak ilişki hedefleri göreli yapılır, 3B referanslar (`Ay1:Ay3!B2`)
+açılır, harici bağlantılar (`[1]Hedef!B2`) bağlantının önbellek değerlerini
+taşıyan gizli sayfalara yönlendirilir. Motor ayrı süreçte çalışır.
+
+Yeni `#REF!/#DIV/0!…` hatalarında, hesaplanamayan hücrede
+(`NOT RECALCULATED`: desteklenmeyen fonksiyon — WEBSERVICE, GETPIVOTDATA,
+CUBE*, FORECAST.ETS* … — veya döngüsel referans; önbellek değeri korunur ve
+bağımlı hücreler onunla hesaplanır) ve `--expect "Sayfa!B4=20000"`
+tutmadığında exit 1. `--engine libreoffice` (veya `DOCGEN_RECALC_ENGINE`)
+LibreOffice ile hesaplar. LibreOffice kuruluysa iki yerde kendiliğinden
+devreye girer: IronCalc dosyayı açamazsa ve hesaplanmış dizi üzerinde LOOKUP
+(`LOOKUP(2,1/(A:A="x"),B:B)`, iki MIT motoru da yanlış satır döndürür)
+hücrelerinde; kurulu değilse bu hücreler NOT RECALCULATED olur. `TODAY()/NOW()` için saat dilimi `DOCGEN_TZ`/`TZ`,
+yoksa Europe/Istanbul. (`recalc_check.py`, Gotenberg üzerinden tarama yapan
+eski yedek yoldur.) Testler: `tests/recalc_tests.py`.
 
 ### 5.7 xlsx_struct.py — satır/sütun ve sıralama
 `insert-rows/delete-rows/insert-cols/delete-cols/sort` sayfa XML'inde yerinde
@@ -385,7 +401,8 @@ docgen/
 │   ├── package.py              # OOXML paketi: yalnız değişen parça yazılır
 │   ├── docx.py, pptx.py, xlsx.py, xlsx_struct.py, pdf.py, theme.py
 │   ├── compare.py              # diff_check modelleri
-│   └── office.py               # LibreOffice (hesap/dönüşüm)
+│   ├── calc.py                 # formül motoru: IronCalc + Formualizer (xlsx_recalc)
+│   └── office.py               # LibreOffice (dönüşüm, yedek hesap)
 ├── scripts/
 │   ├── validate.py             # yapısal + XSD doğrulama (--baseline)
 │   ├── diff_check.py           # kapsam dışı değişiklik kontrolü

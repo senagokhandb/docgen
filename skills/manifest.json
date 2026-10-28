@@ -18,7 +18,7 @@
     },
     "xlsx": {
       "skillId": "xlsx",
-      "description": "Create and edit workbooks in place (docgen.xlsx, xlsx_struct) with LibreOffice recalculation",
+      "description": "Create and edit workbooks in place (docgen.xlsx, xlsx_struct) with IronCalc recalculation",
       "enabled": true,
       "tier": "core"
     },

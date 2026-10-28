@@ -129,15 +129,18 @@ wb.save("x.xlsx")
 
 ## QA: xlsx_recalc.py flow (primary)
 
-1. LibreOffice (headless, in the container, profile forces "always
-   recalculate") converts a copy to xlsx — i.e. computes every formula.
+1. IronCalc computes every formula of a temporary copy (Formualizer
+   answers TEXT/AGGREGATE cells); LibreOffice only for files IronCalc cannot
+   open and for LOOKUP over a computed array (`LOOKUP(2,1/(...),...)`).
 2. The computed results are written into the ORIGINAL package as cached
    values (`<v>` + type); nothing else is rewritten.
 3. Report: changed results, error cells (`#REF!`, `#DIV/0!`…), NEW errors
-   (exit 1), `--expect "Sheet!B4=20000"` checks.
+   (exit 1), NOT RECALCULATED cells (unsupported function such as
+   WEBSERVICE/GETPIVOTDATA/CUBE*, or a circular reference: cached value kept,
+   exit 1), `--expect "Sheet!B4=20000"` checks.
 
-`recalc_check.py` (Gotenberg → PDF → text scan) remains as a fallback when
-LibreOffice is not available; it cannot write results back.
+`recalc_check.py` (Gotenberg → PDF → text scan) is the old fallback; it
+cannot write results back.
 
 ## OOXML anatomy (xlsx = zip)
 

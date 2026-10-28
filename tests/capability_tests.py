@@ -8,7 +8,7 @@ Usage (inside the agent image, or any env with requirements.txt installed):
 
 The fixtures are the acceptance-test files (bicimli.docx, kurumsal_deste.pptx,
 pro_satis_paneli.xlsx, faaliyet_raporu.pdf, ...). Recalculation checks need
-LibreOffice (agent image); without it they are reported as skipped.
+the formula engine (IronCalc, or LibreOffice); without it they are skipped.
 """
 import argparse
 import os
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "lib"))
 from docgen import Ambiguous, NeedsConfirmation, NotSupported, one  # noqa: E402
 from docgen import docx as D, pdf as F, pptx as P, theme as T, xlsx as X  # noqa: E402
-from docgen import office  # noqa: E402
+from docgen import calc, office  # noqa: E402
 from docgen import xlsx_struct as XS  # noqa: E402
 from docgen.compare import check  # noqa: E402
 from docgen.package import Package  # noqa: E402
@@ -189,7 +189,7 @@ def main():
     a = ap.parse_args()
     fx, out = Path(a.fixtures), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    have_lo = office.soffice() is not None
+    have_calc = calc.available() or office.soffice() is not None
     rows, bad = [], 0
 
     def report(tid, status, detail=""):
@@ -215,7 +215,7 @@ def main():
                     report(tid, "FAIL", err)
                     continue
             if extra and Path(fname).suffix == ".xlsx" and (sc.get("recalc") or extra[0]):
-                if have_lo:
+                if have_calc:
                     cmd = [sys.executable, str(ROOT / "scripts" / "xlsx_recalc.py"), dst]
                     for e in extra[0]:
                         cmd += ["--expect", e]
@@ -225,7 +225,7 @@ def main():
                         report(tid, "FAIL recalc", r.stdout.strip().splitlines()[-1])
                         continue
                 else:
-                    notes.append("recalc skipped (no LibreOffice)")
+                    notes.append("recalc skipped (no formula engine)")
             rep = check(src, dst, sc)
             val = run_validate(dst, src)
             detail = "; ".join(notes + [f"validate {val}"])
@@ -261,7 +261,7 @@ def main():
     w = max(len(r[0]) for r in rows)
     for tid, status, detail in rows:
         print(f"{tid:<{w}}  {status:<20}  {detail}")
-    print(f"\n{len(rows) - bad}/{len(rows)} as expected" + ("" if have_lo else "  (LibreOffice missing: recalc skipped)"))
+    print(f"\n{len(rows) - bad}/{len(rows)} as expected" + ("" if have_calc else "  (no formula engine: recalc skipped)"))
     return 0 if bad == 0 else 1
 
 

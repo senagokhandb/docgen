@@ -3,8 +3,9 @@
 # İçerik:
 #   - Python 3.12 + office_oxide / pdfplumber / lxml / openpyxl /
 #     python-docx / python-pptx / pypdfium2
-#   - LibreOffice (headless, nogui): formül yeniden hesabı (yalnızca hesap
-#     motoru; dosyayı yeniden yazmaz) ve eski format (.doc/.xls/.ppt) dönüşümü
+#   - formül motoru: IronCalc + Formualizer (requirements.txt, xlsx_recalc.py)
+#   - LibreOffice (headless, nogui): eski format (.doc/.xls/.ppt) dönüşümü;
+#     IronCalc'ın açamadığı çalışma kitabında yedek formül motoru
 #   - Gotenberg ile aynı fontlar (Caladea, Carlito, Liberation, DejaVu):
 #     PDF metin düzenlemede aynı aileyle yeniden çizim için
 #   - Node 22 + Qwen Code CLI + docx-js + pptxgenjs

@@ -250,9 +250,11 @@ request fields and the response body before retrying.
 - **openpyxl** — new workbooks with styles/charts/validation. Loading and
   saving an existing workbook with openpyxl drops cached formula results
   and rewrites parts: for uploads use `docgen.xlsx` instead.
-- **LibreOffice (headless)** — formula recalculation (`xlsx_recalc.py`),
-  row/column/sort operations (`xlsx_struct.py`), `.doc/.xls/.ppt` conversion
-  (`convert_legacy.py`).
+- **IronCalc + Formualizer** — formula recalculation (`xlsx_recalc.py`).
+  `NOT RECALCULATED` = a function the engine lacks or a circular reference:
+  the cached value is kept; tell the user which cells, do not hand-type values.
+- **LibreOffice (headless)** — `.doc/.xls/.ppt` conversion
+  (`convert_legacy.py`); fallback engine when IronCalc cannot open a workbook.
 - **pdfplumber / pypdfium2** — PDF reading; page operations and in-place
   text edits (`pdf_pages.py`, `pdf_text.py`, `pdf_insert.py`).
 - **lxml** — XML parsing / XSD validation.

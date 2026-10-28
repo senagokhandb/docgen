@@ -9,6 +9,10 @@ lxml>=5.0.0
 requests>=2.31.0
 # hassas xlsx hücre/stil/formül işlemleri (MIT)
 openpyxl>=3.1.0
+# formül motoru (xlsx_recalc): IronCalc + TEXT/AGGREGATE için Formualizer
+# (ikisi de MIT OR Apache-2.0; 0.x sürümler: yükseltmeden önce tests/recalc_tests.py)
+ironcalc==0.9.1
+formualizer==0.13.0
 # güvenli XML parse (PSF)
 defusedxml>=0.7.0
 # kullanıcı şablonundan yeni belge/deste üretimi (MIT)
