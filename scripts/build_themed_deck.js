@@ -115,17 +115,17 @@ content.slides.forEach((s) => {
     placeholder: "PH_TITLE",
     color: hx(c.primary), fontSize: titleSize, bold: true, fontFace: f.heading || "Calibri",
   });
-  // one addText per bullet — pptxgenjs merges arrays into a single <a:p>
-  // (invalid OOXML: repeated <a:pPr>); separate calls give one paragraph each
-  const bodyTexts = bullets.length ? bullets : [s.body || ""];
-  bodyTexts.forEach((b) => {
-    slide.addText(b, {
-      placeholder: "PH_BODY",
-      color: hx(c.text), fontSize: bodySize,
-      bullet: bullets.length > 0,
-      lineSpacing, fontFace: f.body || "Calibri",
-    });
-  });
+  // every paragraph in ONE addText: each call adds its own shape, and every
+  // shape filling PH_BODY sits on the placeholder's spot, so bullets added one
+  // call at a time are drawn over each other. Paragraph options go on each
+  // item: on a placeholder, pptxgenjs drops a lineSpacing given for the call.
+  const paragraphs = bullets.length ? bullets : [s.body || ""];
+  slide.addText(
+    paragraphs.map((text) => ({
+      text, options: { bullet: bullets.length > 0, lineSpacing, breakLine: true },
+    })),
+    { placeholder: "PH_BODY", color: hx(c.text), fontSize: bodySize, fontFace: f.body || "Calibri" },
+  );
 });
 
 deck.writeFile({ fileName: outPath }).then(() => {

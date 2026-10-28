@@ -17,7 +17,7 @@ description: Create and edit PowerPoint (.pptx) presentations. Use for decks, pi
 | New deck, full control (charts, images, custom layouts) | Node `pptxgenjs` script in `/workspace/scratch/` |
 | New deck on a **user template** | `docgen.pptx.start_from_template` + python-pptx layouts |
 | .ppt / .odp input | `convert_legacy.py` first, then edit the .pptx |
-| Render check (pages == visible slides, content) | `python /opt/docgen/scripts/render_check.py <file>` |
+| Render check (pages == visible slides, content, no text drawn over text) | `python /opt/docgen/scripts/render_check.py <file> [--baseline <original>]` |
 | Validation | `validate.py <file> [--baseline <original>]`, `diff_check.py <original> <result> ...` |
 
 pptxgenjs and office_oxide cannot open an existing deck: never "edit" an
@@ -41,7 +41,8 @@ uploaded deck by rebuilding it with them.
      number on every slide.
    - Whitespace over decoration; no clip-art, no random icons.
 4. Verify: validate → readback (all slide titles/text present) →
-   `render_check.py` (PDF page count == visible slides).
+   `render_check.py` (PDF page count == visible slides, no text drawn over
+   other text).
 
 ## Quick themed deck (recommended for text-only decks)
 
@@ -70,14 +71,15 @@ uploaded deck by rebuilding it with them.
    ```
    python /opt/docgen/scripts/repair_pptx.py /workspace/outputs/sunum.pptx
    ```
-   then validate → readback → `render_check.py` (page count == visible slides).
+   then validate → readback → `render_check.py` (page count == visible
+   slides, no text drawn over other text).
 
 Use a custom `pptxgenjs` script (new decks only) whenever the deck needs charts,
 images, tables, or non-standard layouts, or the user asks for specific
 colors, fonts, sizes or positions (the builder only applies theme tokens).
 In pptxgenjs every `addText` takes `x`, `y`, `w`, `h` (inches), `color`
 (hex, no `#`), `fontFace`, `fontSize` (pt), `bold`, `align`; to style part
-of a line in a non-placeholder text box, pass a run array:
+of a line, pass a run array:
 `s.addText([{ text: "Normal " }, { text: "kırmızı", options: { color: "FF0000" } }], { x: 1, y: 2, w: 8, h: 0.6 })`.
 
 ## Creation workflow (pptxgenjs)
@@ -103,23 +105,30 @@ of a line in a non-placeholder text box, pass a run array:
    });
    const s1 = deck.addSlide({ masterName: "MASTER" });
    s1.addText("Başlık", { placeholder: "PH_TITLE", color: theme.colors.primary, fontSize: 32, bold: true });
-   ["Madde 1", "Madde 2", "Madde 3"].forEach((t) =>
-     s1.addText(t, { placeholder: "PH_BODY", color: theme.colors.text,
-                     fontSize: 18, bullet: true, lineSpacing: 28 }));
+   s1.addText(["Madde 1", "Madde 2", "Madde 3"].map((t) =>
+       ({ text: t, options: { bullet: true, lineSpacing: 28, breakLine: true } })),
+     { placeholder: "PH_BODY", color: theme.colors.text, fontSize: 18 });
    deck.writeFile({ fileName: "/workspace/outputs/sunum.pptx" });
    ```
    (`require("pptxgenjs")` resolves via `NODE_PATH` — no local node_modules needed.
    Master placeholders need `options.name`; slides fill them with the same name.
    `slideNumber` on the master handles page numbers — do not draw your own.
-   **Placeholders:** one `addText` per paragraph. Passing an array to a
-   placeholder merges items into one `<a:p>` with repeated `<a:pPr>`
-   (invalid OOXML). Non-placeholder text may use a `{ text }` array.)
+   **One text box = one `addText`** with all of its paragraphs as an array.
+   Every call adds a new shape: bullets added one call at a time into a
+   placeholder all sit on its spot and are drawn over each other. Each
+   paragraph is one item, `{ text, options: { bullet: true, breakLine: true } }`;
+   put paragraph options (`lineSpacing`, `align`, `paraSpaceAfter`) on the
+   item — on a placeholder pptxgenjs drops a `lineSpacing` given for the
+   whole call. Part of a paragraph in another style: more runs before the
+   `breakLine`, e.g. `{ text: "Kalın: ", options: { bullet: true, bold: true } },
+   { text: "devamı", options: { breakLine: true } }`.)
 2. Run: `node /workspace/scratch/build_deck.js`
 3. Repair: `python /opt/docgen/scripts/repair_pptx.py <out.pptx>`
    (fixes known pptxgenjs XML quirks: element order in presentation.xml,
-   split merged bullet paragraphs. Idempotent — "clean" when nothing to fix.)
+   the extra `<a:pPr>` pptxgenjs writes before each later run of a
+   paragraph. Idempotent — "clean" when nothing to fix.)
 4. QA loop: validate.py → readback.py → render_check.py (page count ==
-   visible slides).
+   visible slides, no text drawn over other text).
 
 ## Editing workflow (uploaded deck)
 
@@ -163,7 +172,7 @@ SmartArt, images, hidden slides, links and notes must survive untouched.
    python /opt/docgen/scripts/diff_check.py SRC OUT --allow-slide 2 --format-only \
           --record /workspace/outputs/manifest.json
    python /opt/docgen/scripts/readback.py OUT --format
-   python /opt/docgen/scripts/render_check.py OUT
+   python /opt/docgen/scripts/render_check.py OUT --baseline SRC
    ```
    Scope flags: `--allow-slide N`, `--allow-notes N`, `--allow-text T`,
    `--allow-structure` (slide add/delete/move), `--allow-theme`;

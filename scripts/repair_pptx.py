@@ -8,10 +8,12 @@ Fixes (idempotent, in-place by default):
   1. presentation.xml: reorders top-level children into the ECMA-376
      canonical order (pptxgenjs writes notesMasterIdLst after sldIdLst,
      which the XSD rejects).
-  2. slide XML: splits paragraphs that contain a second <a:pPr> mid-
-     paragraph (produced when pptxgenjs merges multiple text items into
-     one <a:p>). Each pPr boundary becomes its own paragraph; the
-     trailing endParaRPr stays with the last paragraph.
+  2. slide XML: pptxgenjs writes an <a:pPr> before every run of a
+     paragraph, not only the first (e.g. a bold "Kalın: " run followed by
+     plain text); the XSD allows one, first. A new item (bullet, alignment
+     change, breakLine) is already its own <a:p>, so a later pPr belongs to a
+     run that continues the same line: it is removed, and the paragraph
+     keeps its first pPr at the start.
 
 Exit: 0 (nothing to fix or fixed OK), 1 (file problem), 2 (usage).
 """
@@ -52,36 +54,17 @@ def reorder_presentation(root):
     return 1
 
 
-def split_paragraphs(root):
+def drop_run_pprs(root):
     fixed = 0
     for p in root.iter(f"{{{A}}}p"):
         pprs = [c for c in p if localname(c) == "pPr"]
-        if len(pprs) < 2:
+        if not pprs or (len(pprs) == 1 and p[0] is pprs[0]):
             continue
-        # groups: each pPr after the first starts a new paragraph
-        groups = []
-        current = []
-        for c in list(p):
-            if localname(c) == "pPr" and current:
-                groups.append(current)
-                current = []
-            current.append(c)
-        if current:
-            groups.append(current)
-
-        parent = p.getparent()
-        insert_at = list(parent).index(p)
-        new_paras = []
-        for gi, group in enumerate(groups):
-            from lxml import etree
-            np = etree.Element(f"{{{A}}}p")
-            for c in group:
-                np.append(c)
-            new_paras.append(np)
-        for np in new_paras:
-            insert_at += 1
-            parent.insert(insert_at, np)
-        parent.remove(p)
+        for extra in pprs[1:]:
+            p.remove(extra)
+        if p[0] is not pprs[0]:  # the line's first run had no paragraph options
+            p.remove(pprs[0])
+            p.insert(0, pprs[0])
         fixed += 1
     return fixed
 
@@ -107,7 +90,7 @@ def repair(pptx_path: Path, out_path: Path) -> int:
     for name in names:
         if name.startswith("ppt/slides/slide") and name.endswith(".xml"):
             tree = etree.fromstring(contents[name])
-            n = split_paragraphs(tree)
+            n = drop_run_pprs(tree)
             if n:
                 changed += n
             contents[name] = etree.tostring(

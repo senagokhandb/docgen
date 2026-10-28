@@ -77,21 +77,23 @@ const deck = new PptxGenJS();
 deck.layout = "LAYOUT_WIDE";          // 13.33 x 7.5 in; "LAYOUT_16x9" = 10 x 5.63
 deck.author = "docgen"; deck.title = "...";
 
-// slide master = consistent template
+// slide master = consistent template (placeholders need options.name)
 const m = deck.defineSlideMaster({
   title: "CONTENT",
   background: { color: "FFFFFF" },
   objects: [
-    { placeholder: { type: "title", x: .6, y: .35, w: 12.1, h: .9 } },
-    { placeholder: { type: "body",  x: .6, y: 1.6, w: 12.1, h: 4.9 } },
-    { text: { text: "", options: { placeholder: "slnum" } } },
+    { placeholder: { options: { name: "PH_TITLE", type: "title", x: .6, y: .35, w: 12.1, h: .9 } } },
+    { placeholder: { options: { name: "PH_BODY", type: "body", x: .6, y: 1.6, w: 12.1, h: 4.9 } } },
   ],
+  slideNumber: { x: 12.7, y: 7.15, w: .45, h: .25, fontSize: 10 },
 });
 
 const s = deck.addSlide({ masterName: "CONTENT" });
-s.addText("Başlık", { placeholder: "title", fontSize: 30, bold: true, color: "1F4E79" });
-s.addText(["b1", "b2", "b3"],
-  { placeholder: "body", fontSize: 18, bullet: true, color: "1A1A1A", lineSpacing: 28 });
+s.addText("Başlık", { placeholder: "PH_TITLE", fontSize: 30, bold: true, color: "1F4E79" });
+// one text box = one addText, its paragraphs as items (one call per bullet
+// adds a shape per bullet, all on the placeholder's spot)
+s.addText(["b1", "b2", "b3"].map((t) => ({ text: t, options: { bullet: true, lineSpacing: 28, breakLine: true } })),
+  { placeholder: "PH_BODY", fontSize: 18, color: "1A1A1A" });
 
 // charts
 s.addChart(deck.ChartType.bar, [{ name: "2025", labels: ["Q1","Q2","Q3","Q4"], values: [1,2,3,4] }],
@@ -160,8 +162,11 @@ Rules for hand edits:
 
 - `python /opt/docgen/scripts/render_check.py deck.pptx` does the render QA:
   Gotenberg must answer 200 with a real PDF, PDF pages == visible slides
-  (hidden slides are not exported), and text present in the deck must be
-  present in the PDF. On FAIL it prints Gotenberg's own error message.
+  (hidden slides are not exported), text present in the deck must be
+  present in the PDF, and no text may be drawn over other text (FAIL names
+  the slide and both texts). A failed render prints Gotenberg's own error message.
+- Edited deck: `render_check.py OUT --baseline SRC` — text over text that the
+  original already had is reported as a note, not a failure.
 - Each slide = one PDF page (16:9 decks may letterbox).
 - Titles: `--expect-text "Pazar Görünümü"` (repeatable); keep the PDF for a
   closer look with `-o /workspace/scratch/deck.pdf`.

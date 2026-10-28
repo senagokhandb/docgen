@@ -69,7 +69,8 @@ Konteyner her istekte tek seferlik çalışır (`docker compose run --rm agent`)
         diff_check.py orijinal sonuç --allow-...  -> istenen dışında bir şey değiştiyse FAIL
         xlsx_recalc.py -> formül sonuçlarını IronCalc ile hesaplayıp dosyaya yazar
         readback.py [--format] -> içerik / biçim geri okuma
-        render_check.py -> LibreOffice (Gotenberg) dosyayı sayfalara dökebiliyor mu
+        render_check.py -> LibreOffice (Gotenberg) dosyayı sayfalara dökebiliyor mu,
+                           sunumda metin metnin üstüne basılmış mı
       Başarısız adım: düzelt + tekrar (maks. 3 tur, sonra dürüst rapor)
    d. Son dosyayı /workspace/outputs/ koyar; neyin değiştiğini ve neyin
       yapılamadığını (nedeniyle) raporlar; outputs/manifest.json'a kayıt düşer
@@ -237,6 +238,14 @@ kalıbının yerini alır: `-f` olmadan curl, Gotenberg'in 4xx/5xx hata metnini
 "x.pdf" olarak kaydedip exit 0 döner, başarısız render başarılı görünür.
 - Gotenberg 200 dönmeli, gövde açılan bir PDF olmalı, en az 1 sayfa.
 - Sunumlarda PDF sayfa sayısı = görünür slayt sayısı (gizli slaytlar basılmaz).
+- Sunumlarda metin başka bir metnin üstüne basılmışsa FAIL (ör. maddeler
+  ayrı şekiller olarak aynı yere eklenmiş); hata slaytı ve iki metni söyler.
+  Render edilen PDF'te iki ayrı metin satırının en az 3 harfi, küçük olanın
+  kutusunun yarısından fazlası kadar birbirini örtüyorsa çakışma sayılır;
+  aynı harfin hafif kaymış kopyası (gölge, kontur) ve çok farklı boyutlu
+  harfler (başlığın arkasındaki büyük dekoratif sayı) sayılmaz.
+  Düzenlenen destede `--baseline orijinal`: orijinalde de olan çakışma not
+  olarak yazılır, FAIL değildir.
 - Dosyada metin var ama PDF'te yoksa FAIL (boş render).
 - `--expect-pages N`, `--expect-text T` (tekrarlanabilir), `-o` ile PDF'i
   saklama, `--json`; Gotenberg meşgulse (502/503/504, bağlantı hatası) bir
@@ -244,6 +253,7 @@ kalıbının yerini alır: `-f` olmadan curl, Gotenberg'in 4xx/5xx hata metnini
 - Formül hataları burada aranmaz: `xlsx_recalc.py` hesaplanan değerleri
   doğrudan okur ve hangi hatanın yeni olduğunu bilir.
 - Eval'de docx/pptx/xlsx teslim eden her vakada zorunlu adım (`render`).
+- Testler: `tests/deck_tests.py` (imajda, `docgen` ağında, Gotenberg ile).
 
 ### 5.6 xlsx_recalc.py — formül sonuçları
 Formülleri `docgen.calc` ile hesaplar, sonuçları **orijinal paketin** formül
@@ -305,8 +315,10 @@ Gemma'nın vision yeteneği olmadığı için normal akışa girmez.
 ### 5.12 Yardımcılar
 - `repair_pptx.py` — pptxgenjs çıktısındaki bilinen iki XML kusurunu
   düzeltir: `presentation.xml` öğe sırası (XSD'ye göre
-  `notesMasterIdLst` → `sldIdLst` sıralaması) ve placeholder'da birleşik
-  paragraflar (aynı `<a:p>` içindeki tekrarlı `<a:pPr>` → ayrı paragraflar).
+  `notesMasterIdLst` → `sldIdLst` sıralaması) ve paragraf içindeki tekrarlı
+  `<a:pPr>`: pptxgenjs bir paragrafın her parçasının önüne `<a:pPr>` yazar
+  (ör. kalın "Kalın: " + düz devamı); yeni madde zaten ayrı `<a:p>` olduğu
+  için sonraki `<a:pPr>`'lar silinir, paragraf ilk `<a:pPr>`'ını korur.
   Kendiliğinden (idempotent): düzeltecek şey yoksa "clean" der. Her
   pptxgenjs build'i sonrası, validate'den ÖNCE çalışır.
 - `build_templates.py` — imaj derleme sırasında çalışır:
@@ -318,7 +330,8 @@ Gemma'nın vision yeteneği olmadığı için normal akışa girmez.
   çekirdeği). Cümle tam olarak bir kez bulunmazsa derleme durur; Qwen
   sürümü yükseltilince betikteki metin gözden geçirilir.
 - `build_themed_deck.js` — standart temalı sunum üretici
-  (tema JSON + içerik JSON → pptxgenjs ile kurallara uygun deck).
+  (tema JSON + içerik JSON → pptxgenjs ile kurallara uygun deck). Bir
+  slaytın maddeleri tek gövde kutusunda, tek `addText` ile yazılır.
 - `pack_skill.py` — skill dizinini `.skill` paketini çevirir.
 - `e2e_engine_test.sh` — model bağımsız uçtan uca motor testi
   (xlsx + pdf zincirleri; §9'da gösterildiği gibi konteynerde çalışır).

@@ -199,8 +199,9 @@ reporting done:
 4. **Read-back** — `python /opt/docgen/scripts/readback.py <file> [--format]`
    (`--format` shows colors/fonts/sizes/positions to confirm style edits).
 5. **Render** — `python /opt/docgen/scripts/render_check.py <file>` (must
-   PASS): LibreOffice (via Gotenberg) has to lay the file out into real pages;
-   for decks the page count must equal the visible slides. Do not hand-roll
+   PASS; edited deck: `--baseline <original>`): LibreOffice (via Gotenberg)
+   has to lay the file out into real pages; for decks the page count must
+   equal the visible slides and no text may be drawn over other text. Do not hand-roll
    `curl ... -o x.pdf && ls x.pdf` for this — curl without `-f` saves an
    HTTP error as "x.pdf" and exits 0.
 
