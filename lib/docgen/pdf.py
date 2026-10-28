@@ -505,7 +505,7 @@ def insert_paragraphs(src, dst, after, paragraphs, *, page=None, near=None):
     """Add paragraphs right below the line containing ``after``, in the body
     font, size and color of the page and inside the text column. No reflow:
     if they do not fit before the next block / the footer band the edit is
-    refused (ask the user where the text should go instead)."""
+    refused; the user decides what happens to the text that does not fit."""
     ms = find(src, after, page=page, near=near)
     if not ms:
         raise NotFound(f"{after!r} not found")
@@ -550,7 +550,10 @@ def insert_paragraphs(src, dst, after, paragraphs, *, page=None, near=None):
         raise NotSupported(f"the {len(paragraphs)} paragraphs need about {need} lines of space (paragraph gaps "
                            f"included) but only about {room} are free on page {m.page} before the next "
                            f"block/footer — {fit} of {len(paragraphs)} would fit. No reflow: write no file, do "
-                           f"not split, shrink or move text yourself; ask the user where the text should go")
+                           f"not split, shrink or move text yourself, and do not add pages; ask the user what "
+                           f"should happen to the text that does not fit (e.g. a new page after page {m.page}, a "
+                           f"shorter text, or the source document). Where the request puts the text (\"at the "
+                           f"end of section X\") is the insertion point, not that answer")
     keep = _draw(pdf, pg, font_file, size, color, items)
     pg.gen_content()
     fd, tmp = tempfile.mkstemp(suffix=".pdf")

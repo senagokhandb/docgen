@@ -18,7 +18,7 @@ X.rows_where(pkg, "Durum", "Servis", "Servis B")           # row numbers by key 
 # --- write -------------------------------------------------------------
 X.set_value(pkg, "Satışlar!E2", 18, expect=16, allow_formula_overwrite=False)   # str/int/float/bool/None
 X.set_formula(pkg, "Özet!B12", "=SUM(B4:B9)")
-X.formula_to_value(pkg, "Özet!B4:B9", force=True)          # only with --onay
+X.formula_to_value(pkg, "Özet!B4:B9", force=True)          # only with the user's --onay (the library checks it)
 X.set_style(pkg, "Durum!A1:C1",
             font={"bold": True, "italic": False, "underline": False, "strike": False,
                   "color": "FFFFFF", "size": 14, "name": "Arial"},

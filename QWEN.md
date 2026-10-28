@@ -101,6 +101,9 @@ the file changed after it was built: do not use that source.
   deleting rows other cells use, deleting a slide another slide links to,
   formulas -> values). Do it only if the request contains **`--onay`**
   (then pass `force=True` / `--onay`); otherwise explain the risk and stop.
+  The library checks the user's `--onay` itself: without it, `force=True`
+  raises `NeedsConfirmation` again. That is the final answer — do not work
+  around it (no `DOCGEN_ONAY`, no hand-edited XML, no other library).
 - `ValueMismatch` → the user's "old value" is not what the file holds:
   report the real value, change nothing.
 - `NotSupported` → say exactly what cannot be done and why; never replace it

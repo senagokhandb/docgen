@@ -376,24 +376,28 @@ def check_docx_para(ctx, contains, align=None, line_spacing=None, style_level=No
         return False, f"paragraph with {contains!r} not found"
     for pa, t in paras:
         layers = st.ppr_layers(pa)
+        got = []
         if align:
             jc = next((l.find(w("jc")).get(w("val")) for l in layers if l.find(w("jc")) is not None), "left")
             jc = {"start": "left", "end": "right", "distribute": "both"}.get(jc, jc)
             if jc != {"justify": "both"}.get(align, align):
                 return False, f"{contains!r}: align={jc}, expected {align}"
+            got.append(f"align={jc}")
         if line_spacing:
             sp = next((l.find(w("spacing")) for l in layers if l.find(w("spacing")) is not None
                        and l.find(w("spacing")).get(w("line"))), None)
             val = int(sp.get(w("line"))) / 240 if sp is not None else 1.0
             if abs(val - line_spacing) > 0.05:
                 return False, f"{contains!r}: line spacing {val}, expected {line_spacing}"
+            got.append(f"line spacing {val}")
         if space_after is not None:
             sp = next((l.find(w("spacing")) for l in layers if l.find(w("spacing")) is not None
                        and l.find(w("spacing")).get(w("after"))), None)
             val = int(sp.get(w("after"))) / 20 if sp is not None else 0
             if abs(val - space_after) > 0.6:
                 return False, f"{contains!r}: space after {val}pt, expected {space_after}"
-    return True, f"{contains!r}: paragraph properties ok"
+            got.append(f"space after {val}pt")
+    return True, f"{contains!r}: " + (", ".join(got) or "paragraph properties ok")
 
 
 def check_docx_headings(ctx, levels, props, others_unchanged=True):
@@ -604,6 +608,89 @@ def check_docx_theme(ctx, slot=None, color=None, major=None, minor=None):
             if lat is None or lat.get("typeface") != want:
                 return False, f"theme {k} font {None if lat is None else lat.get('typeface')}"
     return True, "theme ok"
+
+
+def _docx_used_styles(z):
+    """Style ids that reach the rendered document: referenced from the body,
+    headers, footers, notes or numbering, their basedOn/link chains and the
+    default styles."""
+    used = set()
+    for n in z.namelist():
+        if re.match(r"word/(document|header\d*|footer\d*|footnotes|endnotes|numbering)\.xml$", n):
+            used |= {e.get(w("val")) for e in etree.fromstring(z.read(n)).iter(w("pStyle"), w("rStyle"), w("tblStyle"))}
+    styles = {s.get(w("styleId")): s for s in etree.fromstring(z.read("word/styles.xml")).iter(w("style"))} \
+        if "word/styles.xml" in z.namelist() else {}
+    used |= {sid for sid, s in styles.items() if s.get(w("default")) in ("1", "true")}
+    todo = list(used)
+    while todo:
+        s = styles.get(todo.pop())
+        for ref in (s.find(w("basedOn")), s.find(w("link"))) if s is not None else ():
+            if ref is not None and ref.get(w("val")) not in used:
+                used.add(ref.get(w("val")))
+                todo.append(ref.get(w("val")))
+    return used
+
+
+def check_docx_theme_cache(ctx, tol=16):
+    """Every cached hex value of a theme-bound color (w:color/@w:val, w:shd/@w:fill,
+    borders, underline) that reaches the rendered document matches the theme
+    as Word computes it ([MS-OI29500] 2.1.72: HSL lightness, shade L*s, tint
+    L*t + 1-t, tint wins). LibreOffice, Gotenberg and PDF exports draw these
+    caches, so a stale one shows the old color outside Word. Unused styles
+    are not counted; ``tol`` (per channel) accepts a tint computed slightly
+    differently but not a value left from the old theme."""
+    th = _xml(ctx.output, "word/theme/theme1.xml")
+    cs = th.find(f".//{{{A}}}clrScheme") if th is not None else None
+    if cs is None:
+        return False, "no theme"
+    base = {}
+    for s in cs:
+        c = s[0] if len(s) else None
+        v = c.get("lastClr") if c is not None and etree.QName(c).localname == "sysClr" else (c.get("val") if c is not None else None)
+        base[etree.QName(s).localname] = v
+    mapping = {"t1": "dark1", "bg1": "light1", "t2": "dark2", "bg2": "light2"}
+    st = _xml(ctx.output, "word/settings.xml")
+    m = st.find(w("clrSchemeMapping")) if st is not None else None
+    mapping.update({etree.QName(k).localname: v for k, v in (m.attrib.items() if m is not None else ())})
+    short = {"text1": "t1", "background1": "bg1", "text2": "t2", "background2": "bg2"}
+    drawing = {"dark1": "dk1", "light1": "lt1", "dark2": "dk2", "light2": "lt2", "hyperlink": "hlink", "followedHyperlink": "folHlink"}
+
+    def expected(name, tint, shade):
+        name = mapping.get(short.get(name, name), name)
+        rgb = base.get(drawing.get(name, name))
+        if not rgb or not re.fullmatch(r"[0-9A-Fa-f]{6}", rgb):
+            return None
+        if not (tint or shade):
+            return rgb.upper()
+        h, light, s = colorsys.rgb_to_hls(*(int(rgb[i:i + 2], 16) / 255 for i in (0, 2, 4)))
+        x = int(tint or shade, 16) / 255
+        light = light * x + 1 - x if tint else light * x
+        return "".join(f"{round(v * 255):02X}" for v in colorsys.hls_to_rgb(h, light, s))
+
+    n, stale = 0, []
+    with zipfile.ZipFile(ctx.output) as z:
+        used = _docx_used_styles(z)
+        for part in z.namelist():
+            if not re.match(r"word/(document|header\d*|footer\d*|footnotes|endnotes|numbering|styles)\.xml$", part):
+                continue
+            root = etree.fromstring(z.read(part))
+            scopes = [root] if part != "word/styles.xml" else \
+                [x for x in root if x.tag == w("docDefaults") or (x.tag == w("style") and x.get(w("styleId")) in used)]
+            for el in (e for sc in scopes for e in sc.iter(etree.Element)):
+                for ref, ti, sh, cache in (("themeColor", "themeTint", "themeShade", "val" if el.tag == w("color") else "color"),
+                                           ("themeFill", "themeFillTint", "themeFillShade", "fill")):
+                    name, got = el.get(w(ref)), el.get(w(cache))
+                    if not name or name == "none" or not got or got == "auto":
+                        continue
+                    want = expected(name, el.get(w(ti)), el.get(w(sh)))
+                    if want is None:
+                        continue
+                    n += 1
+                    if any(abs(int(got[i:i + 2], 16) - int(want[i:i + 2], 16)) > tol for i in (0, 2, 4)):
+                        stale.append(f"{part.split('/')[-1]} {name}: {got.upper()} (theme gives {want})")
+    if stale:
+        return False, f"{len(stale)}/{n} theme-bound colors in use are stale, e.g. {stale[:3]}"
+    return True, f"{n} theme-bound colors in use match the theme"
 
 
 def check_docx_any_color(ctx, color, scope="headings"):
@@ -826,7 +913,11 @@ def check_pptx_slides(ctx, count=None, titles=None, hidden=None, visible=None):
         s = next((s for s, x in zip(slides, tit) if t.lower() in x.lower()), None)
         if s is None or s._element.get("show") in ("0", "false"):
             return False, f"{t!r} not visible"
-    return True, f"slides {tit}"
+    was = ""
+    if ctx.original and ctx.original.lower().endswith(".pptx"):
+        orig = [((s.shapes.title.text if s.shapes.title is not None else "") or "") for s in _prs(ctx.original).slides]
+        was = f" (uploaded file: {orig})" if orig != tit else ""
+    return True, f"slides {tit}{was}"
 
 
 def check_pptx_link(ctx, from_title, to_title):
@@ -853,11 +944,17 @@ def check_pptx_table(ctx, slide, row=None, col=None, value=None, cols=None, head
     if t is None:
         return False, "table not found"
     rows = [[c.text for c in r.cells] for r in t.rows]
+    seen = f"table ok {rows[0]}"
     if value is not None:
         ci = rows[0].index(col) if col in rows[0] else None
         rr = next((r for r in rows if r[0] == row), None)
         if ci is None or rr is None or rr[ci] != value:
             return False, f"cell {row}/{col} = {None if rr is None or ci is None else rr[ci]!r}"
+        seen += f"; row {rr}"
+        ot = _pptx_table(_prs(ctx.original), slide) if ctx.original and ctx.original.lower().endswith(".pptx") else None
+        orr = next((r for r in ([c.text for c in x.cells] for x in ot.rows) if r[0] == row), None) if ot is not None else None
+        if orr and orr != rr:
+            seen += f" (uploaded file: {orr})"
     if cols is not None and len(rows[0]) != cols:
         return False, f"{len(rows[0])} columns"
     if header and header not in rows[0]:
@@ -881,7 +978,7 @@ def check_pptx_table(ctx, slide, row=None, col=None, value=None, cols=None, head
         clr = tc.find(f"{a('tcPr')}/{a('solidFill')}/{a('srgbClr')}")
         if clr is None or not color_ok(clr.get("val"), cell_fill[2]):
             return False, "cell fill missing"
-    return True, f"table ok {rows[0]}"
+    return True, seen
 
 
 def check_pptx_theme(ctx, slot=None, color=None, major=None):
@@ -1069,28 +1166,34 @@ def check_xlsx_style(ctx, range, font=None, fill=None, align=None, numfmt=None, 
     return True, f"{range} style ok"
 
 
-def check_xlsx_cf(ctx, sheet, sqref_has, min_rules=1, keep_from_original=True):
+def check_xlsx_cf(ctx, sheet, sqref_has, min_rules=1, keep_from_original=True, exclude=()):
+    """A rule covers ``sqref_has`` (one cell, or a list of which any one will
+    do); no rule added by the agent covers a cell in ``exclude``."""
     wb = _wb(ctx.output)
     ws = wb[sheet]
     rules = [(str(rng.sqref), r) for rng in ws.conditional_formatting for r in rng.rules]
     from openpyxl.utils.cell import column_index_from_string, coordinate_from_string, range_boundaries
-    col, row = coordinate_from_string(sqref_has)
-    ci = column_index_from_string(col)
 
-    def covers(sq):
+    def covers(sq, cell):
+        col, row = coordinate_from_string(cell)
+        ci = column_index_from_string(col)
         for part in sq.split():
             c1, r1, c2, r2 = range_boundaries(part if ":" in part else f"{part}:{part}")
             if c1 <= ci <= c2 and r1 <= row <= r2:
                 return True
         return False
-    hit = [x for x in rules if covers(x[0])]
+    seen = [f"{sq} {r.type} {r.operator or ''} {' '.join(r.formula or [])}".replace("  ", " ").strip() for sq, r in rules]
+    want = [sqref_has] if isinstance(sqref_has, str) else sqref_has
+    hit = [x for x in rules if any(covers(x[0], c) for c in want)]
     if len(hit) < min_rules:
-        return False, f"rules {[x[0] for x in rules]}"
-    if keep_from_original:
-        o = [str(r.sqref) for r in _wb(ctx.original)[sheet].conditional_formatting]
-        if any(x not in [y[0] for y in rules] for x in o):
-            return False, "original conditional format lost"
-    return True, f"rules {[x[0] for x in rules]}"
+        return False, f"rules {seen}"
+    o = [str(r.sqref) for r in _wb(ctx.original)[sheet].conditional_formatting] if ctx.original else []
+    if keep_from_original and any(x not in [y[0] for y in rules] for x in o):
+        return False, "original conditional format lost"
+    over = sorted({c for sq, _ in rules if sq not in o for c in exclude if covers(sq, c)})
+    if over:
+        return False, f"rules {seen} also cover {over}"
+    return True, f"rules {seen}"
 
 
 def check_xlsx_width(ctx, sheet, col, minimum):
@@ -1235,7 +1338,8 @@ def pdf_lines(path):
 
 def check_pdf_pages(ctx, n):
     k = len(pdf_page_text(ctx.output))
-    return k == n, f"{k} pages (expected {n})"
+    was = f", uploaded file had {len(pdf_page_text(ctx.original))}" if ctx.original and ctx.original.lower().endswith(".pdf") else ""
+    return k == n, f"{k} pages (expected {n}{was})"
 
 
 def check_pdf_page_has(ctx, page, has=(), lacks=()):
@@ -1245,7 +1349,8 @@ def check_pdf_page_has(ctx, page, has=(), lacks=()):
     pt = norm(t[page - 1])
     miss = [x for x in has if norm(x) not in pt]
     bad = [x for x in lacks if norm(x) in pt]
-    return not miss and not bad, f"page {page}: missing {miss} unexpected {bad}" if miss or bad else f"page {page} ok"
+    return not miss and not bad, (f"page {page}: missing {miss} unexpected {bad}" if miss or bad else
+                                  f"page {page} has {list(has)}" + (f", lacks {list(lacks)}" if lacks else ""))
 
 
 def pdf_body_text(path, band=0.08):
@@ -1316,7 +1421,7 @@ def check_pdf_footer(ctx, pattern):
         want = pattern.format(n=i, total=n)
         if want not in pt:
             return False, f"page {i} footer lacks {want!r}"
-    return True, "page numbers consistent"
+    return True, f"page numbers consistent: {pattern.format(n=1, total=n)!r} … {pattern.format(n=n, total=n)!r}"
 
 
 def check_pdf_color(ctx, text, color, page=1):

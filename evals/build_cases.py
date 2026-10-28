@@ -162,7 +162,7 @@ for f, req, levels, want, setp in STYLE:
         {"fn": "docx_ops", "file": f, "ops": [{"op": "style_levels", "levels": levels, "props": setp}]})
 add("docx", "style_scope", ["yapay_zeka_raporu.docx"], "uploads/yapay_zeka_raporu.docx dosyasında tüm bölüm başlıklarını ortala.",
     "edit", [out("docx")] + [{"t": "docx_para", "contains": h, "align": "center"} for h in
-                             ("1. Giriş", "2. Yöntem", "3. Bulgular", "4. Sonuç")] +
+                             ("1. Giriş", "2. Yöntem", "2.1 Veri Kaynakları", "3. Bulgular", "4. Sonuç")] +
     [{"t": "docx_para", "contains": "Bu rapor, kurumda", "align": "left"},
      {"t": "parts_only", "allow": ["word/styles.xml", "word/document.xml"]}],
     {"fn": "docx_ops", "file": "yapay_zeka_raporu.docx", "ops": [{"op": "style_levels", "levels": [1, 2], "props": {"align": "center"}}]})
@@ -291,7 +291,7 @@ for f, heading, nxt, text in (
         {"fn": "docx_ops", "file": f, "ops": [{"op": "append_section", "heading": heading, "text": text}]})
 
 add("docx", "theme", ["yapay_zeka_raporu.docx"], "uploads/yapay_zeka_raporu.docx dosyasında belgenin tema renklerini yeşil tonlarına çevir; kendi rengi olan yazılar korunsun.",
-    "edit", [out("docx"), {"t": "docx_theme", "slot": "accent1", "color": "green"},
+    "edit", [out("docx"), {"t": "docx_theme", "slot": "accent1", "color": "green"}, {"t": "docx_theme_cache"},
              {"t": "docx_chars", "text": "kritik", "props": {"color": "C00000"}}, {"t": "docx_media", "count": 3},
              {"t": "parts_only", "allow": ["word/theme/theme1.xml", "word/styles.xml", "word/stylesWithEffects.xml", "word/document.xml"]}],
     {"fn": "docx_ops", "file": "yapay_zeka_raporu.docx", "ops": [{"op": "theme_color", "slot": s, "color": c} for s, c in
@@ -621,18 +621,20 @@ add("xlsx", "cell_format", ["bicimli.xlsx"], "uploads/bicimli.xlsx dosyasında '
              {"t": "parts_only", "allow": sheet_parts("bicimli.xlsx", "Durum") + ["xl/styles.xml"] + XWB}],
     {"fn": "xlsx_ops", "file": "bicimli.xlsx", "ops": [{"op": "style", "range": "Durum!B3:B4", "font": {"underline": False}}], "recalc": False})
 
-for f, req, rng, sheet, op in (
+for f, req, rng, sheet, op, exclude in (
         ("pro_satis_paneli.xlsx", "Adet 20'den büyük olan hücreleri yeşil dolguyla göster.", "E2", "Satışlar",
-         {"op": "cf", "range": "Satışlar!E2:E41", "operator": "greaterThan", "formula": "20", "fill": "C6EFCE"}),
+         {"op": "cf", "range": "Satışlar!E2:E41", "operator": "greaterThan", "formula": "20", "fill": "C6EFCE"}, []),
         ("fx_notlar.xlsx", "Finali 50'nin altında olan notları kırmızı dolguyla göster.", "D2", "Notlar",
-         {"op": "cf", "range": "Notlar!D2:D31", "operator": "lessThan", "formula": "50", "fill": "FFC7CE"}),
-        ("fx_prim.xlsx", "Satışı 100000 ve üzeri olan temsilcileri yeşil yazıyla vurgula.", "B2", "Primler",
-         {"op": "cf", "range": "Primler!B2:B14", "operator": "greaterThanOrEqual", "formula": "100000", "font_color": "00B050"}),
+         {"op": "cf", "range": "Notlar!D2:D31", "operator": "lessThan", "formula": "50", "fill": "FFC7CE"}, []),
+        # the representative's name (A) or sales (B) may carry the format; the total row (14) is not a representative
+        ("fx_prim.xlsx", "Satışı 100000 ve üzeri olan temsilcileri yeşil yazıyla vurgula.", ["A2", "B2"], "Primler",
+         {"op": "cf", "range": "Primler!B2:B13", "operator": "greaterThanOrEqual", "formula": "100000", "font_color": "00B050"},
+         ["A14", "B14", "C14"]),
         ("fx_hatali.xlsx", "Kârı 100000'in altında olan ayların Kâr hücrelerini turuncu dolguyla işaretle.", "D2", "Gelir Tablosu",
-         {"op": "cf", "range": "Gelir Tablosu!D2:D13", "operator": "lessThan", "formula": "100000", "fill": "FFC000"})):
+         {"op": "cf", "range": "Gelir Tablosu!D2:D13", "operator": "lessThan", "formula": "100000", "fill": "FFC000"}, [])):
     add("xlsx", "conditional_format", [f], f"uploads/{f} dosyasında {req} (kalıcı koşullu biçim olarak)", "edit",
-        [out("xlsx"), {"t": "xlsx_cf", "sheet": sheet, "sqref_has": rng}, {"t": "xlsx_features_kept", "cf_delta": 1},
-         {"t": "xlsx_others_same"}, {"t": "parts_only", "allow": sheet_parts(f, sheet) + ["xl/styles.xml"] + XWB}],
+        [out("xlsx"), {"t": "xlsx_cf", "sheet": sheet, "sqref_has": rng, **({"exclude": exclude} if exclude else {})},
+         {"t": "xlsx_features_kept", "cf_delta": 1}, {"t": "xlsx_others_same"}, {"t": "parts_only", "allow": sheet_parts(f, sheet) + ["xl/styles.xml"] + XWB}],
         {"fn": "xlsx_ops", "file": f, "ops": [op], "recalc": False})
 for f, sheet, col, width, req in (("fx_fatura.xlsx", "Fatura", "A", 30, "Kalem sütununun (A) genişliğini 30 yap."),
                                   ("satislar.xlsx", "Satışlar", "C", 25, "Ürün sütununun (C) genişliğini 25 yap.")):

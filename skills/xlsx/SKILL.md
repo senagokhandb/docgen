@@ -68,7 +68,8 @@ validations, charts, images, names and external links must survive.
    - `set_style` changes only the named properties; `False` removes one
      (`font={"underline": False}`) — never reset the whole format.
    - Guards: overwriting a formula → `NeedsConfirmation` (needs `--onay`,
-     then `allow_formula_overwrite=True`); `expect` mismatch → `ValueMismatch`
+     then `allow_formula_overwrite=True`; without the user's `--onay` the
+     library refuses `force` / `allow_formula_overwrite` too — stop and ask); `expect` mismatch → `ValueMismatch`
      (report the real value); values starting with `=` → use `set_formula`.
    - Rows/columns/sort: `xlsx_struct.py IN OUT insert-rows --sheet S --at 10`,
      `delete-rows` (refuses when formulas/names read the rows; `--onay` only

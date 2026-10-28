@@ -18,7 +18,7 @@ import re
 
 from lxml import etree
 
-from . import DocgenError, NeedsConfirmation, NotFound, NotSupported, one
+from . import DocgenError, NeedsConfirmation, NotFound, NotSupported, one, require_consent
 from .package import R_NS
 
 S_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -325,6 +325,7 @@ def set_value(pkg, target, value, *, expect=None, allow_formula_overwrite=False)
         raise NeedsConfirmation(f"{sheet}!{ref} contains the formula {formula}; overwriting it with a "
                                 f"constant breaks the calculation (needs --onay)")
     if formula:
+        require_consent(f"overwriting the formula {formula} in {sheet}!{ref}")
         _expand_shared(pkg, sheet, c)
         _drop_calc_chain(pkg)
     _clear(c)
@@ -371,6 +372,8 @@ def set_formula(pkg, target, formula, *, allow_formula_overwrite=False):
     _, old = get(pkg, f"{sheet}!{ref}")
     if old and old != formula and not allow_formula_overwrite:
         raise NeedsConfirmation(f"{sheet}!{ref} already contains {old}; replacing it needs --onay")
+    if old and old != formula:
+        require_consent(f"replacing the formula {old} in {sheet}!{ref}")
     c = _cell(pkg, sheet, ref, create=True)
     _expand_shared(pkg, sheet, c)
     _clear(c)
@@ -383,6 +386,7 @@ def formula_to_value(pkg, target, *, force=False):
     """Replace formulas in a range with their cached values (needs --onay)."""
     if not force:
         raise NeedsConfirmation(f"converting formulas in {target} to fixed values needs --onay")
+    require_consent(f"converting formulas in {target} to fixed values")
     sheet, refs = parse_target(target)
     for ref in refs:
         v, f = get(pkg, f"{sheet}!{ref}")

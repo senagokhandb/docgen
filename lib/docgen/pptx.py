@@ -16,7 +16,7 @@ import re
 
 from lxml import etree
 
-from . import NeedsConfirmation, NotFound, NotSupported, one
+from . import NeedsConfirmation, NotFound, NotSupported, one, require_consent
 from .package import R_NS
 
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -571,12 +571,18 @@ def incoming_links(pkg, index):
 
 def delete_slide(pkg, index, force=False):
     """Delete a slide with its notes page. Refuses (NeedsConfirmation) when
-    another slide links to it, unless force=True."""
+    another slide links to it, unless force=True (the user's --onay)."""
     sl = slide(pkg, index)
     links = incoming_links(pkg, index)
     if links and not force:
         raise NeedsConfirmation(f"slide {index} ({sl.title!r}) is the target of links on slide(s) {links}; "
                                 f"deleting it breaks them")
+    if links:
+        require_consent(f"deleting slide {index} ({sl.title!r}) that slide(s) {links} link to")
+    _remove_slide(pkg, sl)
+
+
+def _remove_slide(pkg, sl):
     pres = pkg.xml(PRES)
     rid = sl.sld_id.get(f"{{{R_NS}}}id")
     pres.find(p("sldIdLst")).remove(sl.sld_id)
@@ -672,6 +678,6 @@ def start_from_template(template_path, dst, keep_slides=False):
     if pkg.is_template():
         pkg.as_document()
     if not keep_slides:
-        for i in range(len(slides(pkg)), 0, -1):
-            delete_slide(pkg, i, force=True)
+        for i in range(len(slides(pkg)), 0, -1):  # a new deck from the template: no user content is lost
+            _remove_slide(pkg, slide(pkg, i))
     return pkg.save(dst)

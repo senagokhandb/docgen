@@ -87,11 +87,15 @@ No source → edit in place:
 - Moving a section that does not start/end on a page boundary (moving
   whole pages would also move other content) — explain and ask.
 - `pdf_insert.py` says the text does not fit on the page: there is no
-  reflow. Do not shrink the font or split the text on your own. Ask the
-  user where the rest should go. With the user's
-  placement ("2. sayfadan sonra yeni sayfalara"), render the new pages as
-  HTML styled like the document (same font family/size/margins, read them
-  with `readback.py --format`) and insert them with `pdf_pages.py insert`.
+  reflow. Write no file: say how much fits and ask what should happen to
+  the rest (a new page after page N, a shorter text, or the source
+  document). Where the request puts the text ("bölümün sonuna", "şu
+  paragraftan sonra") is the insertion point, not an answer to that
+  question. Only when the request itself says what to do with text that
+  does not fit ("sığmazsa kalanını 2. sayfadan sonra yeni sayfaya koy"),
+  render the new pages as HTML styled like the document (same font
+  family/size/margins, read them with `readback.py --format`) and insert
+  them with `pdf_pages.py insert`.
 - **Scanned / image-only PDFs:** no text layer → write no file. Do not OCR
   it and never paint over or re-draw text in the image (that alters a
   record); ask for the source file or an OCR'd PDF. Do not guess content.

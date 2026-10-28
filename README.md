@@ -26,7 +26,7 @@ kullanıcı istegi ──> docker compose ──> agent (Qwen Code, non-root san
 
 | Katman | İçerik |
 |---|---|
-| **Ajan çekirdeği** | Qwen Code CLI v0.26.1 — istemi headless modda (`--yolo -o json`) çalıştırır; kod yazma, shell komutu, dosya okuma/yazma yetkileri tam |
+| **Ajan çekirdeği** | Qwen Code CLI v0.26.1 — istemi headless modda (`--yolo -o json`) çalıştırır; kod yazma, shell komutu, dosya okuma/yazma yetkileri tam. Headless modun gömülü "soru sorma, varsayıp bitir" cümlesi imaj derlenirken `patch_qwen_prompt.py` ile değiştirilir: her çalışma bir sohbet turudur; ajan yalnızca kullanıcının kararı olmadan güvenle ilerleyemeyeceği yerde (araç reddi, belirsiz hedef, onaysız yıkıcı değişiklik) sorar, gerisinde varsayımını söyleyip işi bitirir. |
 | **Model** | `.env` dosyasındaki OpenAI-uyumlu endpoint (Gemma). Konteyner dışı, kendi inference servisiniz |
 | **docgen kütüphanesi** | `/opt/docgen/lib/docgen` (`PYTHONPATH`) — yüklenen dosyayı **yerinde** düzenlemek için test edilmiş yapı taşları: `package`, `docx`, `pptx`, `xlsx`, `xlsx_struct`, `pdf`, `theme`, `compare`, `office`. Agent kendi script'inden çağırır. |
 | **Python motoru** | office_oxide (hızlı okuma, yeni dosya), python-docx / python-pptx (kullanıcı şablonundan üretim), openpyxl (yeni çalışma kitabı), pdfplumber, pypdfium2 (PDF sayfa + metin düzenleme), lxml, requests, defusedxml, Pillow |
@@ -149,7 +149,10 @@ Korumalar (yardımcılar zorunlu kılar, agent atlayamaz):
   yazılmaz, adaylar başlık yoluyla raporlanır.
 - **Yıkıcı işlem** (`NeedsConfirmation`): formülün üzerine yazma, başka
   hücrelerin okuduğu satırı silme, başka slaytın köprü verdiği slaytı silme,
-  formülü değere çevirme → yalnızca istekte `--onay` varsa.
+  formülü değere çevirme → yalnızca istekte `--onay` varsa. Bunu kütüphane
+  de denetler: entrypoint istekteki `--onay`'ı ajan başlamadan `DOCGEN_ONAY`
+  olarak konteynerin ana sürecine (PID 1) sabitler; ajanın `force=True`
+  yazması ya da değişkeni kendisi ataması onay sayılmaz.
 - **Yanlış "eski değer"** (`ValueMismatch`): dosyadaki gerçek değer raporlanır.
 - **Yapılamayan** (`NotSupported`): PDF metninin rengi/fontu, sığmayan PDF
   metni, birleşik hücreli tabloda sütun ekleme, pivot tablolu sayfada satır
@@ -293,6 +296,11 @@ Gemma'nın vision yeteneği olmadığı için normal akışa girmez.
 - `build_templates.py` — imaj derleme sırasında çalışır:
   `themes/templates/docx/base.docx` (placeholder'lı iskelet) ve
   `themes/templates/pptx/basic.pptx` (10 slayt) üretir.
+- `patch_qwen_prompt.py` — imaj derleme sırasında çalışır: Qwen Code'un
+  headless sistem talimatındaki "tek turluk çalışma, asla soru sorma,
+  varsayıp bitir" cümlesini docgen'in gerçeğiyle değiştirir (bkz. Ajan
+  çekirdeği). Cümle tam olarak bir kez bulunmazsa derleme durur; Qwen
+  sürümü yükseltilince betikteki metin gözden geçirilir.
 - `build_themed_deck.js` — standart temalı sunum üretici
   (tema JSON + içerik JSON → pptxgenjs ile kurallara uygun deck).
 - `pack_skill.py` — skill dizinini `.skill` paketini çevirir.
@@ -392,6 +400,7 @@ docgen/
 │   ├── visual_qa.py            # görsel QA eklentisi (varsayılan kapalı)
 │   ├── repair_pptx.py          # pptxgenjs XML kusurlarını düzeltir (idempotent)
 │   ├── build_templates.py      # imaj derleme: docx/pptx baz şablonları
+│   ├── patch_qwen_prompt.py    # imaj derleme: Qwen headless "soru sorma" cümlesini değiştirir
 │   ├── build_themed_deck.js    # standart temalı sunum üretici
 │   ├── e2e_engine_test.sh      # model bağımsız uçtan uca motor testi
 │   └── pack_skill.py           # skill -> .skill paketi

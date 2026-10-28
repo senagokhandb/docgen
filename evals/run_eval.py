@@ -65,9 +65,13 @@ def run_case(case, run_dir, timeout):
     for f in [x for x in case["fixtures"].split(";") if x]:
         shutil.copyfile(EVALS / "fixtures" / f, ws / "uploads" / f)
     os.system(f"chmod -R a+rwX '{cdir}'")
-    name = f"docgen-eval-{case['id'].lower().replace('_', '-')}"
+    # the run dir is part of the name: parallel runs of the same case must not collide
+    name = re.sub(r"[^a-z0-9.-]", "-", f"docgen-eval-{run_dir.name}-{case['id']}".lower())
+    # stream-json events go to a file in the workspace while the agent runs, so
+    # its steps survive a timeout (evaluate.py reads them from there)
     cmd = ["docker", "run", "--rm", "--name", name, "--network", "docgen", "--env-file", str(ROOT / ".env"),
-           "-e", "GOTENBERG_URL=http://gotenberg:3000",
+           "-e", "GOTENBERG_URL=http://gotenberg:3000", "-e", "DOCGEN_OUTPUT_FORMAT=stream-json",
+           "-e", "DOCGEN_OUT_FILE=/workspace/.docgen-events.jsonl",
            "-v", f"{ws}:/workspace", "-v", f"{ws / 'uploads'}:/workspace/uploads:ro", IMAGE, case["request"]]
     start = time.time()
     meta = {"timeout": False}

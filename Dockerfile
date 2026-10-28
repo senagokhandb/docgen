@@ -53,6 +53,10 @@ RUN chmod -R a+rX /opt/docgen && chmod 755 /opt/docgen/entrypoint.sh
 
 # --- tema şablonlarını imaj derleme sırasında üret (tekrarlanabilir) ---
 RUN python /opt/docgen/scripts/build_templates.py
+# --- Qwen Code'un headless "soru sorma, varsayıp bitir" cümlesini docgen'in
+#     gerçeğiyle değiştir (her çalışma bir sohbet turu; soru yalnızca gerekince).
+#     Metin bulunamazsa derleme durur: Qwen sürümü yükseltilince gözden geçirilir.
+RUN python /opt/docgen/scripts/patch_qwen_prompt.py
 
 # --- non-root sandbox kullanıcısı ---
 RUN useradd -m -u 1000 -s /bin/bash agent \

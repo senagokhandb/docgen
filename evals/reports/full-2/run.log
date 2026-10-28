@@ -1,0 +1,477 @@
+235 cases -> /Users/sena/docgen/evals/runs/full-2  (concurrency 3)
+[1/235] DOCX-run_format-03  27.4s
+[2/235] DOCX-run_format-02  76.5s
+[3/235] DOCX-run_format-01  91.3s
+[4/235] DOCX-run_format-04  89.0s
+[5/235] DOCX-run_format-05  63.2s
+[6/235] DOCX-run_format-07  35.0s
+[7/235] DOCX-run_format-06  61.4s
+[8/235] DOCX-run_format-08  76.3s
+[9/235] DOCX-run_format-10  65.1s
+[10/235] DOCX-run_format-09  69.9s
+[11/235] DOCX-run_format-12  72.5s
+[12/235] DOCX-run_format-13  80.9s
+[13/235] DOCX-run_format-11  92.5s
+[14/235] DOCX-run_format-15  64.3s
+[15/235] DOCX-run_format-16  65.6s
+[16/235] DOCX-run_format-14  87.9s
+[17/235] DOCX-run_format-17  52.5s
+[18/235] DOCX-run_format-18  47.3s
+[19/235] DOCX-paragraph_format-01  61.3s
+[20/235] DOCX-paragraph_format-03  74.6s
+[21/235] DOCX-paragraph_format-02  81.9s
+[22/235] DOCX-paragraph_format-04  75.1s
+[23/235] DOCX-paragraph_format-05  51.1s
+[24/235] DOCX-paragraph_format-07  64.5s
+[25/235] DOCX-paragraph_format-06  95.4s
+[26/235] DOCX-paragraph_format-08  83.1s
+[27/235] DOCX-paragraph_format-09  67.4s
+[28/235] DOCX-style_scope-02  77.1s
+[29/235] DOCX-style_scope-03  109.2s
+[30/235] DOCX-style_scope-04  109.7s
+[31/235] DOCX-style_scope-05  99.7s
+[32/235] DOCX-style_scope-01  296.4s
+[33/235] DOCX-remove_property-01  55.0s
+[34/235] DOCX-remove_property-02  65.4s
+[35/235] DOCX-style_scope-06  148.8s
+[36/235] DOCX-text_replace-01  38.5s
+[37/235] DOCX-remove_property-03  90.6s
+[38/235] DOCX-text_replace-02  56.3s
+[39/235] DOCX-text_replace-05  37.4s
+[40/235] DOCX-text_replace-03  73.8s
+[41/235] DOCX-text_replace-04  76.3s
+[42/235] DOCX-text_replace-07  30.2s
+[43/235] DOCX-text_replace-06  44.9s
+[44/235] DOCX-text_replace-08  47.6s
+[45/235] DOCX-header_footer-02  61.5s
+[46/235] DOCX-replace_all-01  75.5s
+[47/235] DOCX-header_footer-01  112.2s
+[48/235] DOCX-replace_all-02  69.0s
+[49/235] DOCX-replace_all-03  71.9s
+[50/235] DOCX-table-01  87.8s
+[51/235] DOCX-table-02  90.2s
+[52/235] DOCX-table-03  66.8s
+[53/235] DOCX-table-04  64.7s
+[54/235] DOCX-table-06  62.1s
+[55/235] DOCX-table-05  79.6s
+[56/235] DOCX-table-07  60.7s
+[57/235] DOCX-structure-02  89.6s
+[58/235] DOCX-structure-03  85.6s
+[59/235] DOCX-structure-01  110.9s
+[60/235] DOCX-structure-06  81.9s
+[61/235] DOCX-structure-05  97.0s
+[62/235] DOCX-structure-04  126.5s
+[63/235] DOCX-theme-02  43.0s
+[64/235] DOCX-ambiguity-01  51.6s
+[65/235] DOCX-ambiguity-02  59.0s
+[66/235] DOCX-ambiguity-03  53.7s
+[67/235] DOCX-not_found-01  90.6s
+[68/235] DOCX-partial-01  83.8s
+[69/235] DOCX-template-01  78.0s
+[70/235] DOCX-partial-02  90.4s
+[71/235] DOCX-template-02  107.1s
+[72/235] DOCX-template-03  167.4s
+[73/235] DOCX-create-01  150.2s
+[74/235] DOCX-create-02  98.7s
+[75/235] DOCX-legacy-01  95.5s
+[76/235] DOCX-create-03  133.6s
+[77/235] DOCX-nochange-01  51.7s
+[78/235] PPTX-text_replace-01  50.8s
+[79/235] PPTX-text_replace-02  48.4s
+[80/235] PPTX-text_replace-03  36.9s
+[81/235] PPTX-text_replace-04  38.8s
+[82/235] PPTX-text_replace-05  38.3s
+[83/235] PPTX-text_replace-06  38.5s
+[84/235] PPTX-text_replace-07  36.3s
+[85/235] PPTX-text_replace-08  48.9s
+[86/235] DOCX-theme-01  900.2s  TIMEOUT
+[87/235] PPTX-text_replace-09  56.3s
+[88/235] PPTX-text_replace-10  44.3s
+[89/235] PPTX-run_format-01  55.6s
+[90/235] PPTX-run_format-02  54.5s
+[91/235] PPTX-run_format-03  68.4s
+[92/235] PPTX-run_format-04  62.8s
+[93/235] PPTX-run_format-06  47.4s
+[94/235] PPTX-run_format-05  120.6s
+[95/235] PPTX-run_format-07  72.7s
+[96/235] PPTX-run_format-08  66.1s
+[97/235] PPTX-run_format-09  67.7s
+[98/235] PPTX-run_format-10  73.2s
+[99/235] PPTX-run_format-11  62.6s
+[100/235] PPTX-run_format-12  47.0s
+[101/235] PPTX-paragraph_align-01  30.1s
+[102/235] PPTX-paragraph_align-03  39.0s
+[103/235] PPTX-paragraph_align-02  72.9s
+[104/235] PPTX-paragraph_align-04  61.3s
+[105/235] PPTX-geometry-03  45.3s
+[106/235] PPTX-geometry-01  89.9s
+[107/235] PPTX-geometry-04  43.8s
+[108/235] PPTX-fill_background-01  45.0s
+[109/235] PPTX-geometry-05  80.7s
+[110/235] PPTX-fill_background-03  31.3s
+[111/235] PPTX-fill_background-02  56.5s
+[112/235] PPTX-geometry-02  253.9s
+[113/235] PPTX-fill_background-04  67.8s
+[114/235] PPTX-notes-01  56.6s
+[115/235] PPTX-notes-04  67.6s
+[116/235] PPTX-notes-02  73.0s
+[117/235] PPTX-notes-03  77.5s
+[118/235] PPTX-table-03  60.8s
+[119/235] PPTX-table-01  80.4s
+[120/235] PPTX-table-02  113.5s
+[121/235] PPTX-slide_ops-01  41.8s
+[122/235] PPTX-table-04  111.2s
+[123/235] PPTX-slide_ops-02  68.2s
+[124/235] PPTX-slide_ops-03  80.4s
+[125/235] PPTX-slide_ops-05  59.1s
+[126/235] PPTX-slide_ops-06  58.6s
+[127/235] PPTX-slide_ops-04  96.2s
+[128/235] PPTX-theme-01  55.8s
+[129/235] PPTX-guard-01  77.9s
+[130/235] PPTX-theme-02  69.0s
+[131/235] PPTX-ambiguity-01  46.1s
+[132/235] PPTX-ambiguity-02  69.3s
+[133/235] PPTX-ambiguity-03  67.6s
+[134/235] PPTX-create-01  83.4s
+[135/235] PPTX-template-01  166.5s
+[136/235] PPTX-template-02  140.9s
+[137/235] PPTX-create-02  57.1s
+[138/235] PPTX-nochange-01  34.4s
+[139/235] PPTX-legacy-01  77.5s
+[140/235] PPTX-create-03  97.0s
+[141/235] XLSX-value_recalc-01  102.8s
+[142/235] XLSX-value_recalc-02  104.1s
+[143/235] XLSX-value_recalc-03  94.2s
+[144/235] XLSX-value_recalc-04  71.1s
+[145/235] XLSX-value_recalc-05  56.0s
+[146/235] XLSX-value_recalc-06  49.8s
+[147/235] XLSX-formula-02  51.1s
+[148/235] XLSX-formula-03  63.3s
+[149/235] XLSX-formula-01  98.1s
+[150/235] XLSX-cell_format-01  47.5s
+[151/235] XLSX-cell_format-02  74.6s
+[152/235] XLSX-cell_format-03  71.2s
+[153/235] XLSX-cell_format-04  66.4s
+[154/235] XLSX-cell_format-05  67.2s
+[155/235] XLSX-cell_format-08  44.7s
+[156/235] XLSX-cell_format-06  91.6s
+[157/235] XLSX-cell_format-07  133.2s
+[158/235] XLSX-cell_format-09  71.2s
+[159/235] XLSX-cell_format-10  118.4s
+[160/235] XLSX-conditional_format-01  84.6s
+[161/235] XLSX-cell_format-11  115.7s
+[162/235] XLSX-conditional_format-04  90.8s
+[163/235] XLSX-conditional_format-03  124.8s
+[164/235] XLSX-column_width-01  57.0s
+[165/235] XLSX-column_width-02  82.9s
+[166/235] XLSX-structure-01  116.4s
+[167/235] XLSX-structure-02  111.7s
+[168/235] XLSX-structure-04  51.1s
+[169/235] XLSX-structure-03  148.9s
+[170/235] XLSX-conditional_format-02  469.4s
+[171/235] XLSX-structure-05  117.7s
+[172/235] XLSX-structure-07  121.1s
+[173/235] XLSX-guard-01  81.3s
+[174/235] XLSX-structure-06  164.8s
+[175/235] XLSX-guard-02  50.2s
+[176/235] XLSX-guard-03  76.3s
+[177/235] XLSX-guard_confirmed-01  74.4s
+[178/235] XLSX-ambiguity-01  35.2s
+[179/235] XLSX-guard-04  121.3s
+[180/235] XLSX-ambiguity-02  34.4s
+[181/235] XLSX-template-01  106.2s
+[182/235] XLSX-create-01  92.8s
+[183/235] XLSX-template-02  110.9s
+[184/235] XLSX-create-03  63.6s
+[185/235] XLSX-create-02  86.1s
+[186/235] XLSX-legacy-01  87.3s
+[187/235] XLSX-nochange-01  51.8s
+[188/235] PDF-text_replace-01  65.7s
+[189/235] PDF-text_replace-02  42.9s
+[190/235] PDF-text_replace-03  63.4s
+[191/235] PDF-text_replace-04  75.9s
+[192/235] PDF-text_replace-05  67.6s
+[193/235] PDF-text_replace-06  30.8s
+[194/235] PDF-text_replace-09  42.9s
+[195/235] PDF-text_replace-07  48.6s
+[196/235] PDF-text_replace-08  56.9s
+[197/235] PDF-text_replace-10  30.4s
+[198/235] PDF-text_replace-11  60.5s
+[199/235] PDF-text_replace-12  69.1s
+[200/235] PDF-table_cell-01  67.7s
+[201/235] PDF-table_cell-03  37.1s
+[202/235] PDF-table_cell-05  38.5s
+[203/235] PDF-table_cell-04  66.5s
+[204/235] PDF-table_cell-02  120.0s
+[205/235] PDF-table_cell-06  36.4s
+[206/235] PDF-pages-01  83.9s
+[207/235] PDF-header_footer-02  101.1s
+[208/235] PDF-header_footer-01  140.3s
+[209/235] PDF-pages-03  34.0s
+[210/235] PDF-pages-02  84.4s
+[211/235] PDF-pages-04  70.5s
+[212/235] PDF-pages-05  58.7s
+[213/235] PDF-pages-07  43.0s
+[214/235] PDF-pages-06  58.6s
+[215/235] PDF-pages-08  66.4s
+[216/235] PDF-ambiguity-01  50.0s
+[217/235] PDF-ambiguity-02  85.5s
+[218/235] PDF-text_replace-13  72.1s
+[219/235] PDF-ambiguity-03  140.6s
+[220/235] PDF-refuse-02  45.9s
+[221/235] PDF-refuse-01  100.1s
+[222/235] PDF-refuse-03  58.6s
+[223/235] PDF-refuse-05  63.5s
+[224/235] PDF-refuse-06  31.0s
+[225/235] PDF-refuse-04  92.2s
+[226/235] PDF-refuse-07  106.4s
+[227/235] PDF-text_insert-01  120.7s
+[228/235] PDF-create-01  77.7s
+[229/235] PDF-create-02  141.8s
+[230/235] PDF-create-03  115.8s
+[231/235] PDF-create-04  77.6s
+[232/235] PDF-watermark-02  107.5s
+[233/235] PDF-nochange-01  50.6s
+[234/235] PDF-watermark-01  213.5s
+[235/235] PDF-refuse-08  566.0s
+grading ...
+DOCX-ambiguity-01                  PASS  
+DOCX-ambiguity-02                  PASS  
+DOCX-ambiguity-03                  PASS  
+DOCX-create-01                     PASS  
+DOCX-create-02                     PASS  
+DOCX-create-03                     PASS  
+DOCX-header_footer-01              PASS  
+DOCX-header_footer-02              PASS  
+DOCX-legacy-01                     PASS  
+DOCX-nochange-01                   PASS  
+DOCX-not_found-01                  PASS  
+DOCX-paragraph_format-01           PASS  
+DOCX-paragraph_format-02           PASS  
+DOCX-paragraph_format-03           PASS  
+DOCX-paragraph_format-04           PASS  
+DOCX-paragraph_format-05           PASS  
+DOCX-paragraph_format-06           PASS  
+DOCX-paragraph_format-07           PASS  
+DOCX-paragraph_format-08           PASS  
+DOCX-paragraph_format-09           PASS  
+DOCX-partial-01                    PASS  
+DOCX-partial-02                    PASS  
+DOCX-remove_property-01            PASS  
+DOCX-remove_property-02            PASS  
+DOCX-remove_property-03            PASS  
+DOCX-replace_all-01                PASS  
+DOCX-replace_all-02                PASS  
+DOCX-replace_all-03                PASS  
+DOCX-run_format-01                 PASS  
+DOCX-run_format-02                 PASS  
+DOCX-run_format-03                 PASS  
+DOCX-run_format-04                 PASS  
+DOCX-run_format-05                 PASS  
+DOCX-run_format-06                 PASS  
+DOCX-run_format-07                 PASS  
+DOCX-run_format-08                 PASS  
+DOCX-run_format-09                 PASS  
+DOCX-run_format-10                 PASS  
+DOCX-run_format-11                 PASS  
+DOCX-run_format-12                 PASS  
+DOCX-run_format-13                 PASS  
+DOCX-run_format-14                 PASS  
+DOCX-run_format-15                 PASS  
+DOCX-run_format-16                 PASS  
+DOCX-run_format-17                 PASS  
+DOCX-run_format-18                 PASS  
+DOCX-structure-01                  PASS  
+DOCX-structure-02                  PASS  
+DOCX-structure-03                  PASS  
+DOCX-structure-04                  PASS  
+DOCX-structure-05                  PASS  
+DOCX-structure-06                  PASS  
+DOCX-style_scope-01                PASS  
+DOCX-style_scope-02                PASS  
+DOCX-style_scope-03                PASS  
+DOCX-style_scope-04                PASS  
+DOCX-style_scope-05                PASS  
+DOCX-style_scope-06                FAIL  yanıt: dosyayla tutarsız/eksik
+DOCX-table-01                      PASS  
+DOCX-table-02                      PASS  
+DOCX-table-03                      PASS  
+DOCX-table-04                      PASS  
+DOCX-table-05                      PASS  
+DOCX-table-06                      PASS  
+DOCX-table-07                      PASS  
+DOCX-template-01                   PASS  
+DOCX-template-02                   PASS  
+DOCX-template-03                   PASS  
+DOCX-text_replace-01               PASS  
+DOCX-text_replace-02               PASS  
+DOCX-text_replace-03               PASS  
+DOCX-text_replace-04               PASS  
+DOCX-text_replace-05               PASS  
+DOCX-text_replace-06               PASS  
+DOCX-text_replace-07               PASS  
+DOCX-text_replace-08               PASS  
+DOCX-theme-01                      FAIL  altyapı
+DOCX-theme-02                      PASS  
+PDF-ambiguity-01                   PASS  
+PDF-ambiguity-02                   PASS  
+PDF-ambiguity-03                   PASS  
+Could not get FontBBox from font descriptor because None cannot be parsed as 4 floats
+Could not get FontBBox from font descriptor because None cannot be parsed as 4 floats
+Could not get FontBBox from font descriptor because None cannot be parsed as 4 floats
+PDF-create-01                      PASS  
+PDF-create-02                      PASS  
+PDF-create-03                      PASS  
+PDF-create-04                      PASS  
+PDF-header_footer-01               PASS  
+PDF-header_footer-02               PASS  
+PDF-nochange-01                    PASS  
+PDF-pages-01                       PASS  
+PDF-pages-02                       FAIL  yanıt: dosyayla tutarsız/eksik
+PDF-pages-03                       PASS  
+PDF-pages-04                       PASS  
+PDF-pages-05                       PASS  
+PDF-pages-06                       PASS  
+PDF-pages-07                       PASS  
+PDF-pages-08                       PASS  
+PDF-refuse-01                      PASS  
+PDF-refuse-02                      PASS  
+PDF-refuse-03                      PASS  
+PDF-refuse-04                      PASS  
+PDF-refuse-05                      PASS  
+PDF-refuse-06                      PASS  
+PDF-refuse-07                      PASS  
+PDF-refuse-08                      FAIL  model: yanlış/eksik araç yolu
+PDF-table_cell-01                  PASS  
+PDF-table_cell-02                  PASS  
+PDF-table_cell-03                  PASS  
+PDF-table_cell-04                  PASS  
+PDF-table_cell-05                  PASS  
+PDF-table_cell-06                  PASS  
+PDF-text_insert-01                 PASS  
+PDF-text_replace-01                PASS  
+PDF-text_replace-02                PASS  
+PDF-text_replace-03                PASS  
+PDF-text_replace-04                PASS  
+PDF-text_replace-05                PASS  
+PDF-text_replace-06                PASS  
+PDF-text_replace-07                PASS  
+PDF-text_replace-08                PASS  
+PDF-text_replace-09                PASS  
+PDF-text_replace-10                PASS  
+PDF-text_replace-11                PASS  
+PDF-text_replace-12                PASS  
+PDF-text_replace-13                PASS  
+PDF-watermark-01                   PASS  
+PDF-watermark-02                   PASS  
+PPTX-ambiguity-01                  PASS  
+PPTX-ambiguity-02                  PASS  
+PPTX-ambiguity-03                  PASS  
+PPTX-create-01                     PASS  
+PPTX-create-02                     PASS  
+PPTX-create-03                     PASS  
+PPTX-fill_background-01            PASS  
+PPTX-fill_background-02            PASS  
+PPTX-fill_background-03            PASS  
+PPTX-fill_background-04            PASS  
+PPTX-geometry-01                   PASS  
+PPTX-geometry-02                   PASS  
+PPTX-geometry-03                   PASS  
+PPTX-geometry-04                   PASS  
+PPTX-geometry-05                   PASS  
+PPTX-guard-01                      PASS  
+PPTX-legacy-01                     PASS  
+PPTX-nochange-01                   PASS  
+PPTX-notes-01                      PASS  
+PPTX-notes-02                      PASS  
+PPTX-notes-03                      PASS  
+PPTX-notes-04                      PASS  
+PPTX-paragraph_align-01            PASS  
+PPTX-paragraph_align-02            PASS  
+PPTX-paragraph_align-03            PASS  
+PPTX-paragraph_align-04            PASS  
+PPTX-run_format-01                 PASS  
+PPTX-run_format-02                 PASS  
+PPTX-run_format-03                 PASS  
+PPTX-run_format-04                 PASS  
+PPTX-run_format-05                 PASS  
+PPTX-run_format-06                 PASS  
+PPTX-run_format-07                 PASS  
+PPTX-run_format-08                 PASS  
+PPTX-run_format-09                 PASS  
+PPTX-run_format-10                 PASS  
+PPTX-run_format-11                 PASS  
+PPTX-run_format-12                 PASS  
+PPTX-slide_ops-01                  PASS  
+PPTX-slide_ops-02                  PASS  
+PPTX-slide_ops-03                  PASS  
+PPTX-slide_ops-04                  PASS  
+PPTX-slide_ops-05                  PASS  
+PPTX-slide_ops-06                  PASS  
+PPTX-table-01                      PASS  
+PPTX-table-02                      PASS  
+PPTX-table-03                      PASS  
+PPTX-table-04                      PASS  
+PPTX-template-01                   PASS  
+PPTX-template-02                   PASS  
+PPTX-text_replace-01               PASS  
+PPTX-text_replace-02               PASS  
+PPTX-text_replace-03               PASS  
+PPTX-text_replace-04               PASS  
+PPTX-text_replace-05               PASS  
+PPTX-text_replace-06               PASS  
+PPTX-text_replace-07               PASS  
+PPTX-text_replace-08               PASS  
+PPTX-text_replace-09               PASS  
+PPTX-text_replace-10               PASS  
+PPTX-theme-01                      PASS  
+PPTX-theme-02                      PASS  
+XLSX-ambiguity-01                  PASS  
+XLSX-ambiguity-02                  PASS  
+XLSX-cell_format-01                PASS  
+XLSX-cell_format-02                PASS  
+XLSX-cell_format-03                PASS  
+XLSX-cell_format-04                PASS  
+XLSX-cell_format-05                PASS  
+XLSX-cell_format-06                PASS  
+XLSX-cell_format-07                PASS  
+XLSX-cell_format-08                PASS  
+XLSX-cell_format-09                PASS  
+XLSX-cell_format-10                PASS  
+XLSX-cell_format-11                PASS  
+XLSX-column_width-01               PASS  
+XLSX-column_width-02               PASS  
+XLSX-conditional_format-01         PASS  
+XLSX-conditional_format-02         PASS  
+XLSX-conditional_format-03         FAIL  sonuç: dosya beklenenden farklı
+XLSX-conditional_format-04         PASS  
+XLSX-create-01                     PASS  
+XLSX-create-02                     PASS  
+XLSX-create-03                     PASS  
+XLSX-formula-01                    PASS  
+XLSX-formula-02                    FAIL  yanıt: dosyayla tutarsız/eksik
+XLSX-formula-03                    PASS  
+XLSX-guard-01                      PASS  
+XLSX-guard-02                      PASS  
+XLSX-guard-03                      PASS  
+XLSX-guard-04                      FAIL  model: yanlış/eksik araç yolu
+XLSX-guard_confirmed-01            PASS  
+XLSX-legacy-01                     PASS  
+XLSX-nochange-01                   PASS  
+XLSX-structure-01                  PASS  
+XLSX-structure-02                  PASS  
+XLSX-structure-03                  PASS  
+XLSX-structure-04                  PASS  
+XLSX-structure-05                  PASS  
+XLSX-structure-06                  PASS  
+XLSX-structure-07                  PASS  
+XLSX-template-01                   PASS  
+XLSX-template-02                   PASS  
+XLSX-value_recalc-01               PASS  
+XLSX-value_recalc-02               PASS  
+XLSX-value_recalc-03               PASS  
+XLSX-value_recalc-04               PASS  
+XLSX-value_recalc-05               PASS  
+XLSX-value_recalc-06               PASS  
+report: /Users/sena/docgen/evals/runs/full-2/report.md
+run_eval exit=0

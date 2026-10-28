@@ -12,7 +12,7 @@ import re
 
 from lxml import etree
 
-from . import NeedsConfirmation, NotSupported
+from . import NeedsConfirmation, NotSupported, require_consent
 from .xlsx import (WB, _drop_calc_chain, _expand_shared, _mark_recalc, col_index, col_letter, defined_names,
                    dependents_of_cols, dependents_of_rows, s, sheet_part, sheets, split_ref)
 
@@ -305,6 +305,8 @@ def delete_rows(pkg, sheet, at, count=1, force=False):
     if deps and not force:
         raise NeedsConfirmation(f"{len(deps)} reference(s) read rows {at}-{at + count - 1} of {sheet} and would "
                                 f"become #REF!, e.g. {deps[:4]}")
+    if deps:
+        require_consent(f"deleting rows {at}-{at + count - 1} of {sheet} that {len(deps)} reference(s) read")
     _expand_all_shared(pkg, sheet)
     _apply(pkg, Shift(sheet, "row", at, -count))
 
@@ -315,6 +317,8 @@ def delete_cols(pkg, sheet, at, count=1, force=False):
     if deps and not force:
         raise NeedsConfirmation(f"{len(deps)} reference(s) read the columns to be deleted and would "
                                 f"become #REF!, e.g. {deps[:4]}")
+    if deps:
+        require_consent(f"deleting columns of {sheet} that {len(deps)} reference(s) read")
     _expand_all_shared(pkg, sheet)
     _apply(pkg, Shift(sheet, "col", at, -count))
 
@@ -370,11 +374,13 @@ def sort_range(pkg, sheet, rng, by, descending=False, header=True, force=False):
         block[rn] = cells
         for c in cells:
             f = c.find(s("f"))
-            if f is not None and f.text and not force:
+            if f is not None and f.text:
                 for sh_, _, rr1, _, rr2 in references(f.text, sheet, names):
                     if sh_ == sheet and rr1 is not None and (rr1 != rn or rr2 != rn) and not (rr2 < first or rr1 > r2):
-                        raise NeedsConfirmation(f"{c.get('r')} (={f.text}) reads other rows of the range; "
-                                                f"sorting would change its meaning")
+                        why = f"{c.get('r')} (={f.text}) reads other rows of the range; sorting would change its meaning"
+                        if not force:
+                            raise NeedsConfirmation(why)
+                        require_consent(why)
     sst = shared_strings(pkg)
     keycol = col_index(by)
     keyed = []

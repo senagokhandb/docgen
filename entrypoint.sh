@@ -1,6 +1,7 @@
 #!/bin/bash
 # ============================================================
 # DOCGEN entrypoint
+# 0) istekteki --onay'ı DOCGEN_ONAY olarak bu sürecin (PID 1) ortamına sabitler
 # 1) skills + sistem kurallarını agent evine kopyalar
 # 2) Gotenberg'in hazır olmasını bekler
 # 3) Qwen Code'u tek seferlik (one-shot) çalıştırır:
@@ -16,6 +17,24 @@ if [ -z "$REQUEST" ]; then
   echo "Kullanım: docker compose run --rm agent \"<belge istegi>\"" >&2
   echo "Örnek:   docker compose run --rm agent \"Q3 finans raporu.docx oluştur\"" >&2
   exit 1
+fi
+
+# --- 0) kullanıcı onayı (--onay) ---
+# Yıkıcı değişiklikler (formül -> değer, başka hücrelerin okuduğu satırı silme,
+# bağlantı verilen slaytı silme ...) yalnızca istekte "--onay" varsa yapılır.
+# Karar burada, ajan başlamadan verilir ve DOCGEN_ONAY=1|0 olarak bu sürecin
+# (PID 1) ortamına sabitlenir; docgen kütüphanesi onu /proc/1/environ'dan okur
+# (docgen.require_consent). Ajan kendi süreçlerinde değişken atayabilir ama
+# PID 1'in ortamını değiştiremez: force=True ya da DOCGEN_ONAY=1 yazması onay
+# sayılmaz. .env / docker -e ile gelen DOCGEN_ONAY yok sayılır; tek kaynak istek.
+if [ "$$" -ne 1 ]; then
+  echo "[docgen] entrypoint konteynerin ana süreci (PID 1) olmalı; --init kullanmayın." >&2
+  exit 2
+fi
+ONAY=0
+if [[ " $REQUEST " =~ [[:space:]]--onay[[:space:]] ]]; then ONAY=1; fi
+if [ "${DOCGEN_ONAY:-}" != "$ONAY" ]; then
+  exec env DOCGEN_ONAY="$ONAY" "$0" "$@"
 fi
 
 # --- 1) agent evi: skills ve sistem kuralları ---

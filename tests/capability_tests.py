@@ -91,7 +91,10 @@ DOCX = [
     ("RD-W3", "yapay_zeka_raporu.docx", lambda p: (lambda t: D.add_column(t, len(D.table_rows(t)[0]) - 1, ["Pay (%)"] + [""] * (len(D.table_rows(t)) - 1)))(one(D.find_table(p, "Kaynak"))),
      scope(section=["Veri Kaynakları"], expect=["Pay (%)"])),
     ("KR-W1", "yapay_zeka_raporu.docx", lambda p: [T.set_color(p, s, c) for s, c in (("accent1", "2E7D32"), ("accent2", "66BB6A"), ("dk2", "1B5E20"))],
-     scope(theme=True)),
+     scope(theme=True, format_only=True),
+     # LibreOffice draws the cached hex values: none may still follow the old theme
+     lambda dst: (lambda n: f"{n} stale theme color caches" if n else None)(
+         T.refresh_word_caches(Package(dst), {"accent1", "accent2", "dk2"}))),
 ]
 
 PPTX = [
@@ -206,6 +209,11 @@ def main():
                 continue
             pkg.save(dst)
             notes = []
+            if extra and callable(extra[0]):
+                err = extra[0](dst)
+                if err:
+                    report(tid, "FAIL", err)
+                    continue
             if extra and Path(fname).suffix == ".xlsx" and (sc.get("recalc") or extra[0]):
                 if have_lo:
                     cmd = [sys.executable, str(ROOT / "scripts" / "xlsx_recalc.py"), dst]

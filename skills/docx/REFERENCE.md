@@ -46,8 +46,9 @@ D.set_cell_shading(t, 0, 1, "1F3864")
 D.start_from_template(template, dst, keep_content=False)   # .dotx/.docx -> .docx, body emptied
 ```
 Errors: `docgen.NotFound`, `docgen.Ambiguous` (`.candidates`), `docgen.NotSupported`
-(e.g. merged cells for add_column). Theme: `docgen.theme.set_color(pkg, "accent1", "2E7D32")`,
-`set_fonts(pkg, major="Georgia", minor="Calibri")`.
+(e.g. merged cells for add_column). Theme: `docgen.theme.set_color(pkg, "accent1", "2E7D32")`
+(also refreshes the cached hex values of theme-bound colors; `refresh_word_caches(pkg)` does
+only that), `set_fonts(pkg, major="Georgia", minor="Calibri")`.
 
 ## office_oxide Python API (verified signatures)
 

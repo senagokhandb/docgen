@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
-from docgen import DocgenError  # noqa: E402
+from docgen import DocgenError, consented  # noqa: E402
 from docgen import xlsx as X  # noqa: E402
 from docgen import xlsx_struct as XS  # noqa: E402
 from docgen.package import Package  # noqa: E402
@@ -91,8 +91,9 @@ def main():
         return 1
     lost = lost_features(before_f, X.features(pkg))
     new_err = errors(pkg) - before_e
-    if (lost or new_err) and not a.onay:
-        print("[xlsx_struct] REFUSED  the operation would damage the workbook:")
+    if (lost or new_err) and not (a.onay and consented()):
+        print("[xlsx_struct] REFUSED  the operation would damage the workbook"
+              + (" (--onay is accepted only when the user's request contains it)" if a.onay else "") + ":")
         for l in lost:
             print(f"  lost {l}")
         for sh, ref in sorted(new_err):

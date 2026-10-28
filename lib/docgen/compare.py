@@ -25,7 +25,29 @@ R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 ALWAYS_OK = ("docProps/core.xml", "docProps/app.xml")
 
 
-def c14n(el):
+# cached hex value of a theme-bound color: (theme attribute, cache attribute;
+# None = w:val on <w:color>, w:color on borders / <w:u> / <w:shd>). Caches follow
+# the theme (theme.refresh_word_caches), so they are compared on their own and
+# a change that touches nothing else is allowed by --allow-theme.
+_THEME_CACHE = ((f"{{{W}}}themeColor", None), (f"{{{W}}}themeFill", f"{{{W}}}fill"))
+
+
+def theme_caches(el, drop=False):
+    """Cached theme color values under ``el`` in document order; drop=True
+    also removes them from ``el``."""
+    out = []
+    for x in el.iter(etree.Element):
+        for ref, cache in _THEME_CACHE:
+            if x.get(ref):
+                c = cache or (f"{{{W}}}val" if x.tag == f"{{{W}}}color" else f"{{{W}}}color")
+                if x.get(c) is not None:
+                    out.append(x.get(c).upper())
+                    if drop:
+                        del x.attrib[c]
+    return out
+
+
+def c14n(el, theme_cache=True):
     if el is None:
         return ""
     el = etree.fromstring(etree.tostring(el))
@@ -33,7 +55,19 @@ def c14n(el):
         for k in list(x.attrib):
             if "rsid" in k:
                 del x.attrib[k]
+    if not theme_cache:
+        theme_caches(el, drop=True)
     return etree.tostring(el, method="c14n").decode()
+
+
+def _theme_cache_only(original, result, part):
+    """``part`` differs between the two packages only in cached theme color values."""
+    with zipfile.ZipFile(original) as za, zipfile.ZipFile(result) as zb:
+        try:
+            ra, rb = etree.fromstring(za.read(part)), etree.fromstring(zb.read(part))
+        except etree.XMLSyntaxError:
+            return False
+    return c14n(ra, theme_cache=False) == c14n(rb, theme_cache=False)
 
 
 def format_changed(runs_a, runs_b):
@@ -79,7 +113,7 @@ def _docx_model(path):
     for p in D.paragraphs(pkg):
         runs, last = [], None
         for r in p.runs:
-            sig = c14n(r.el.find(f"{{{W}}}rPr"))
+            sig = c14n(r.el.find(f"{{{W}}}rPr"), theme_cache=False)
             if runs and sig == last:
                 runs[-1][0] += r.text
             elif r.text:
@@ -87,13 +121,14 @@ def _docx_model(path):
                 last = sig
         pics = [(e.get("cx"), e.get("cy")) for e in p.el.iter(f"{{{WP}}}extent")]
         paras.append({"part": p.part, "where": p.where(), "path": " > ".join(p.path), "text": p.text,
-                      "ppr": c14n(p.el.find(f"{{{W}}}pPr")), "runs": [tuple(x) for x in runs], "pics": pics})
+                      "ppr": c14n(p.el.find(f"{{{W}}}pPr"), theme_cache=False), "runs": [tuple(x) for x in runs],
+                      "pics": pics, "theme": theme_caches(p.el)})
     styles = {}
     if pkg.has("word/styles.xml"):
         for st in pkg.xml("word/styles.xml").iter(f"{{{W}}}style"):
-            styles[st.get(f"{{{W}}}styleId")] = c14n(st)
+            styles[st.get(f"{{{W}}}styleId")] = (c14n(st, theme_cache=False), theme_caches(st))
     body = pkg.xml("word/document.xml").find(f"{{{W}}}body")
-    sects = [c14n(s) for s in body.iter(f"{{{W}}}sectPr")]
+    sects = [(c14n(s, theme_cache=False), theme_caches(s)) for s in body.iter(f"{{{W}}}sectPr")]
     tables = []
     for ti, t in enumerate(x for x in body if x.tag == f"{{{W}}}tbl"):
         cell_paras = [p for p in D.paragraphs(pkg, include_headers=False) if p.table and p.table[0] == ti]
@@ -122,6 +157,8 @@ def _docx_diff(a, b):
                         what.append("paragraph format")
                     if x["pics"] != y["pics"]:
                         what.append("images")
+                    if x["theme"] != y["theme"]:
+                        what.append("theme color values")
                     if what:
                         out.append({"kind": "changed", "what": ", ".join(what), "where": y["where"],
                                     "section": [x["path"], y["path"]], "text_before": x["text"], "text_after": y["text"]})
@@ -133,12 +170,16 @@ def _docx_diff(a, b):
                 out.append({"kind": "inserted", "what": "paragraph", "where": y["where"], "section": [y["path"]],
                             "text_before": "", "text_after": y["text"]})
     for sid in sorted(A_["styles"].keys() | B_["styles"].keys()):
-        if A_["styles"].get(sid) != B_["styles"].get(sid):
-            out.append({"kind": "changed" if sid in A_["styles"] and sid in B_["styles"] else "added/removed",
-                        "what": "style", "where": f"style {sid}", "style": sid, "text_before": "", "text_after": ""})
-    if A_["sects"] != B_["sects"]:
-        out.append({"kind": "changed", "what": "page setup (sectPr)", "where": "section properties",
-                    "text_before": "", "text_after": ""})
+        x, y = A_["styles"].get(sid), B_["styles"].get(sid)
+        if x != y:
+            what = "theme color values" if x and y and x[0] == y[0] else "style"
+            out.append({"kind": "changed" if x and y else "added/removed",
+                        "what": what, "where": f"style {sid}", "style": sid, "text_before": "", "text_after": ""})
+    sa, sb = A_["sects"], B_["sects"]
+    if sa != sb:
+        same = [x[0] for x in sa] == [y[0] for y in sb]
+        out.append({"kind": "changed", "what": "theme color values" if same else "page setup (sectPr)",
+                    "where": "section properties", "text_before": "", "text_after": ""})
     ta, tb = A_["tables"], B_["tables"]
     sm = difflib.SequenceMatcher(a=[t["text"] for t in ta], b=[t["text"] for t in tb], autojunk=False)
     for op, i1, i2, j1, j2 in sm.get_opcodes():
@@ -574,6 +615,8 @@ def allowed(e, scope):
             return f"--allow-page {n}"
     if e.get("band") and scope.get("band"):
         return "--allow-band"
+    if e.get("what") == "theme color values" and scope.get("theme"):
+        return "--allow-theme"
     if e.get("structure") and scope.get("structure"):
         return "--allow-structure"
     if scope.get("structure") and e.get("what") == "value/formula" and tb.startswith("=") and ta.startswith("=") \
@@ -600,7 +643,7 @@ def check(original, result, scope):
     plus expect-text checks."""
     k, entries, parts = diff(original, result)
     ok_entries, bad = [], []
-    fmt_words = ("format", "fill", "position", "images", "background", "style", "layout")
+    fmt_words = ("format", "fill", "position", "images", "background", "style", "layout", "theme color")
     for e in entries:
         rule = allowed(e, scope)
         if rule and scope.get("text_only") and (any(w in e["what"] for w in fmt_words)):
@@ -619,6 +662,8 @@ def check(original, result, scope):
         match = lambda name, g: name == g or fnmatch.fnmatchcase(name, g.replace("[", "[[]"))
         for n in parts["semantic"] + parts["added"] + parts["removed"]:
             if n in ALWAYS_OK or any(match(n, g) for g in model + tuple(allow_parts)):
+                continue
+            if scope.get("theme") and k == "docx" and n in parts["semantic"] and _theme_cache_only(original, result, n):
                 continue
             if n.endswith(".rels") and any(match(n.replace("_rels/", "").rsplit(".rels", 1)[0], g) for g in model):
                 continue

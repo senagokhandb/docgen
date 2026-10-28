@@ -77,7 +77,10 @@ Never rebuild an uploaded document; change only what was asked.
    - tables: `D.find_table`, `D.table_rows`, `D.set_cell_text`, `D.add_row`,
      `D.add_column`, `D.delete_column`, `D.set_cell_shading`.
    - theme recolor: `docgen.theme.set_color(pkg, "accent1", "2E7D32")`
-     (author-set colors stay as they are).
+     (author-set colors stay as they are). It also refreshes the hex values
+     Word caches next to theme colors (incl. tints/shades), so render_check
+     and PDF show the new colors; do not recompute them yourself. Verify with
+     `diff_check.py SRC OUT --allow-theme --format-only`.
 3. Verify:
    ```bash
    python /opt/docgen/scripts/validate.py OUT --baseline SRC
@@ -129,4 +132,5 @@ fields, fill them in place with `D.replace(one(D.find(pkg, "{{AD}}")), "…")`.
 | `diff_check` FAIL "character format (request was text-only)" | replacement spread formatting | replace only the exact expression (`find` + `replace`) |
 | validate: error that also exists in the original | pre-existing Word quirk | always pass `--baseline <original>` for edits |
 | style change not visible | run has direct formatting overriding the style, or theme font/color | change the runs, or remove the direct formatting (`False`) |
+| theme recolor visible in Word but not in render_check / PDF | cached hex values of theme colors are stale (theme edited without `set_color`) | `docgen.theme.refresh_word_caches(pkg)` |
 | `render_check` FAIL (Gotenberg HTTP error / no pages) | broken zip or malformed part | rebuild with `Package.save`, never hand-zip |
