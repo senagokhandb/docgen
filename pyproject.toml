@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "docgen-service"
+version = "1.1.0"
+description = "Document generation agent (DOCX, PPTX, XLSX, PDF) exposed via MCP. Developed by Digital Brain Technologies."
+authors = [{ name = "Digital Brain Technologies" }]
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = ["Private :: Do Not Upload"]
+# The host side only: the agent itself runs in the docgen-agent image (Dockerfile),
+# one throw-away container per job.
+dependencies = [
+    "pydantic>=2.13,<3",
+    "pydantic-settings>=2.15,<3",
+    "httpx>=0.28,<1",
+    "structlog>=26.1,<27",
+    "typer>=0.27,<1",
+    "uvicorn>=0.54,<1",
+    "mcp>=2.2,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1,<10",
+    "pytest-asyncio>=1.4,<2",
+    "jsonschema>=4.26,<5",
+    "pyyaml>=6,<7",
+]
+
+[project.scripts]
+docgen-service = "docgen_service.interfaces.cli:main"
+docgen-mcp = "docgen_service.interfaces.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docgen_service"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: fast, hermetic tests that need no running services",
+]
+addopts = "-ra --strict-markers"

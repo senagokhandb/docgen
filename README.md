@@ -563,3 +563,38 @@ ham ajan çıktısı) ve `previews/` (PDF önizleme önbelleği).
 kimlik doğrulaması yoktur — `--host 0.0.0.0` ile açılırsa ağdaki herkes ajanı
 çalıştırabilir ve oturum dosyalarını indirebilir. Ajan tarafındaki sandbox
 modeli (non-root, `uploads/` salt okunur, `--rm`) CLI ile aynıdır.
+
+---
+
+## 14. MCP servisi (`src/docgen_service/`, `deploy/`)
+
+Doküman ajanını bir host sisteme (Oppy) MCP üzerinden bağlayan ince katman.
+Yapısı oppy-web-agent'ın MCP katmanıyla aynıdır; entegrasyon rehberi
+[docs/INTEGRATION.md](docs/INTEGRATION.md), planlayıcı için yetenek tanımı
+[docs/capability/document_capability.yaml](docs/capability/document_capability.yaml),
+yönlendirme test seti
+[docs/capability/routing_test_set.yaml](docs/capability/routing_test_set.yaml).
+
+| Parça | Ne yapar |
+|---|---|
+| `interfaces/mcp_server.py` | İnce adaptör: `document_run`, `document_job`, `document_cancel`, `document_read`, `document_status`; `docgen://status` ve `docgen://jobs/{id}/files/{ad}` resource'ları; `/health` (token yok), `/jobs/{id}/files/{ad}` (token); bearer token, eşzamanlılık kapıları, SIGTERM'de boşaltma |
+| `jobs.py` | İş servisi: her iş kendi `docgen-agent` konteynerinde, UI ile aynı şekilde (aynı entrypoint, ağ, `.env`, stream-json); kuyruk, zaman aşımı, iptal, `continue_from` zinciri (dosyalar + `/workspace/previous/<n>/`), kalıcı kayıt, saklama süresi |
+| `conversation.py` | UI ile paylaşılan kısım: prompt kurma, olay → adım özeti, dosya adları (`ui/server.py` de bunu kullanır) |
+| `core/availability.py` | Öz-denetim: docker, ajan imajı, Gotenberg, model endpoint'i, ajan `.env`'i |
+| `config.py` | Tüm ayarlar `DOCGEN_` önekiyle; ajanın `.env`'inden ayrı (token ajana asla geçmez) |
+
+```bash
+./deploy/generate-secrets.sh                      # deploy/stack.env: token, iş klasörü
+cp deploy/service.env.example deploy/service.env
+docker compose -f deploy/compose.yml --env-file deploy/stack.env build
+docker compose -f deploy/compose.yml --env-file deploy/stack.env up -d docgen-mcp
+curl http://127.0.0.1:18766/health
+python deploy/check_mcp.py --token-file deploy/stack.env   # uçtan uca kontrol (gerçek iş)
+.venv/bin/python -m pytest                                 # birim + sözleşme + drift testleri
+```
+
+Onay (`--onay`) MCP'de yalnızca `confirm` parametresiyle verilir: istek
+metnindeki `--onay` yok sayılır (planlayıcı modelin yazdığı metin kullanıcı
+onayı değildir). Servis konteyneri işleri hostun docker soketiyle başlatır —
+bu, hostta root yetkisi demektir; port yalnızca loopback'te yayınlanır
+(bkz. INTEGRATION.md §1).

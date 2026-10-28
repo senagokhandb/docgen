@@ -1,0 +1,249 @@
+# Routing test set for the host planner. Developed by Digital Brain Technologies.
+#
+# Generic requests in Turkish and English with the behaviour the planner is expected
+# to choose. It tests the planner's routing, not the document agent: give the planner
+# the capability definition (document_capability.yaml) and compare its plan with
+# `expected`.
+#
+# expected:
+#   document_create    document_run without files (a new document)
+#   document_edit      document_run with the user's attached files (`files`)
+#   document_continue  document_run with continue_from: the job that delivered the file
+#                      in `context`
+#   document_read      document_read (the text of a document as it is)
+#   no_document        do not use the document capability; `route` names where it
+#                      belongs: internal_documents, business_data, web_research,
+#                      email_calendar, conversation, image
+#   gather_first       collect the content with `first_route` first, then document_run
+#                      with that content in the request or a data file
+#   confirm            the agent asked for consent to a destructive change (`context`);
+#                      `confirm` says whether the plan may set confirm true
+#
+# All names of companies, projects, customers and persons are placeholders in angle
+# brackets: put names of the test environment in their place.
+
+version: "1.0"
+capability: document_generation
+capability_version: "1.0"
+
+cases:
+  # ---- document_create ------------------------------------------------------
+  - id: c01
+    language: tr
+    request: Yapay zekânın eğitimdeki kullanımını anlatan 10 slaytlık bir sunum hazırla.
+    expected: document_create
+  - id: c02
+    language: en
+    request: Write a two-page cover letter template for a junior accountant position as a Word document.
+    expected: document_create
+  - id: c03
+    language: tr
+    request: Öğrenci, Vize, Final ve Ortalama sütunları olan, ortalaması formülle hesaplanan bir Excel not çizelgesi yap.
+    expected: document_create
+  - id: c04
+    language: en
+    request: Create a PDF one-pager that explains our office's recycling rules in five short sections.
+    expected: document_create
+  - id: c05
+    language: tr
+    request: Bu toplantının kararlarını madde madde içeren bir tutanak oluştur. Kararlar - bütçe onaylandı, lansman Mart'a ertelendi, işe alım dondu.
+    expected: document_create
+    note: The content is in the request; nothing has to be gathered.
+  - id: c06
+    language: en
+    request: Make a monthly budget spreadsheet with income, expenses by category and a chart of the totals.
+    expected: document_create
+
+  # ---- document_edit --------------------------------------------------------
+  - id: e01
+    language: tr
+    request: Ekteki raporda "Sonuç" başlığını kırmızı yap.
+    files: [rapor.docx]
+    expected: document_edit
+  - id: e02
+    language: en
+    request: In the attached deck, delete slide 4 and move the summary slide to the end.
+    files: [quarterly-review.pptx]
+    expected: document_edit
+  - id: e03
+    language: tr
+    request: Ekteki tabloda Satış sütununa göre büyükten küçüğe sırala ve toplam satırını koru.
+    files: [satislar.xlsx]
+    expected: document_edit
+  - id: e04
+    language: en
+    request: Change the date in the footer of every page of this PDF to 2026.
+    files: [policy.pdf]
+    expected: document_edit
+  - id: e05
+    language: tr
+    request: Bu şablonu kullanarak "Toplantı Tutanağı" başlıklı bir belge hazırla; Katılımcılar, Gündem ve Kararlar bölümleri olsun.
+    files: [kurumsal-sablon.dotx]
+    expected: document_edit
+    note: The attachment is a template; the request says so.
+  - id: e06
+    language: en
+    request: Convert the attached old Excel file to the current format and freeze the header row.
+    files: [inventory.xls]
+    expected: document_edit
+
+  # ---- document_continue ----------------------------------------------------
+  - id: f01
+    language: tr
+    request: Başlığı biraz daha büyüt ve koyu mavi yap.
+    context: In the previous turn the document agent delivered rapor.docx (job J1).
+    expected: document_continue
+  - id: f02
+    language: en
+    request: Add a slide with three key takeaways before the last one.
+    context: In the previous turn the document agent delivered strategy.pptx (job J2).
+    expected: document_continue
+  - id: f03
+    language: tr
+    request: 7. bölümü tablolarla daha ayrıntılı anlat ve başlığını kırmızı yap.
+    context: Two turns ago the document agent delivered rehber.pdf (job J3); the last turn was small talk.
+    expected: document_continue
+    note: continue_from is J3, the job that delivered the PDF, not re-uploading it.
+  - id: f04
+    language: en
+    request: Also add a column for the tax amount at 20 percent.
+    context: In the previous turn the document agent delivered prices.xlsx (job J4).
+    expected: document_continue
+  - id: f05
+    language: tr
+    request: İkinci olanı kastettim, Bulgular altındaki.
+    context: The agent asked which of two "Sonuç" headings to change (job J5, no file).
+    expected: document_continue
+  - id: f06
+    language: en
+    request: Now make a PDF of it.
+    context: In the previous turn the document agent delivered handbook.docx (job J6).
+    expected: document_continue
+
+  # ---- document_read --------------------------------------------------------
+  - id: d01
+    language: tr
+    request: Ekteki PDF'teki tabloları olduğu gibi metin olarak çıkar.
+    files: [fiyat-listesi.pdf]
+    expected: document_read
+  - id: d02
+    language: en
+    request: Give me the raw text of every slide in this deck, nothing else.
+    files: [kickoff.pptx]
+    expected: document_read
+  - id: d03
+    language: tr
+    request: Bu Word belgesinde hangi yazı tipleri ve renkler kullanılmış, olduğu gibi listele.
+    files: [teklif.docx]
+    expected: document_read
+    note: formatting true.
+  - id: d04
+    language: en
+    request: Show me what the spreadsheet you just made contains, cell by cell.
+    context: In the previous turn the document agent delivered budget.xlsx (job J7).
+    expected: document_read
+    note: job_id J7 and name budget.xlsx; no new job.
+
+  # ---- no_document ----------------------------------------------------------
+  - id: n01
+    language: tr
+    request: <Şirket> izin politikasına göre yıllık izin kaç gün?
+    expected: no_document
+    route: internal_documents
+  - id: n02
+    language: en
+    request: What was our revenue growth in the last quarter compared to the one before?
+    expected: no_document
+    route: business_data
+  - id: n03
+    language: tr
+    request: Avrupa Birliği'nin yapay zekâ yasası ne zaman yürürlüğe girdi?
+    expected: no_document
+    route: web_research
+  - id: n04
+    language: en
+    request: Do I have any meetings with <Customer> next week?
+    expected: no_document
+    route: email_calendar
+  - id: n05
+    language: tr
+    request: Teşekkürler, çok işime yaradı!
+    expected: no_document
+    route: conversation
+  - id: n06
+    language: en
+    request: Draw a logo for our new product line.
+    expected: no_document
+    route: image
+  - id: n07
+    language: tr
+    request: Ekteki sözleşmede fesih süresi kaç gün yazıyor?
+    files: [sozlesme.pdf]
+    expected: no_document
+    route: internal_documents
+    note: A question about a document's content, not a change and not a raw extraction.
+  - id: n08
+    language: en
+    request: Summarize the main points of the attached report in three sentences here in the chat.
+    files: [annual-report.pdf]
+    expected: no_document
+    route: internal_documents
+
+  # ---- gather_first ---------------------------------------------------------
+  - id: g01
+    language: tr
+    request: Son çeyreğin satış rakamlarıyla bölge bazında bir Excel raporu hazırla.
+    expected: gather_first
+    first_route: business_data
+  - id: g02
+    language: en
+    request: Make a slide deck on the current state of solid-state batteries with recent figures.
+    expected: gather_first
+    first_route: web_research
+  - id: g03
+    language: tr
+    request: <Proje> projesinin dokümanlarındaki riskleri özetleyen bir Word raporu yaz.
+    expected: gather_first
+    first_route: internal_documents
+  - id: g04
+    language: en
+    request: Create a PDF comparing the prices of the three leading cloud providers' smallest virtual machines today.
+    expected: gather_first
+    first_route: web_research
+  - id: g05
+    language: tr
+    request: Geçen ayın müşteri şikâyetlerini kategoriye göre sayıp grafikle gösteren bir sunum yap.
+    expected: gather_first
+    first_route: business_data
+  - id: g06
+    language: en
+    request: Turn our onboarding guide's key rules into a one-page PDF checklist.
+    expected: gather_first
+    first_route: internal_documents
+
+  # ---- confirm --------------------------------------------------------------
+  - id: k01
+    language: tr
+    request: Evet, formülleri değere çevir.
+    context: The agent replied that converting the formulas of Özet to values cannot be undone and asked for consent (job K1, no file).
+    expected: confirm
+    confirm: true
+  - id: k02
+    language: en
+    request: Yes, go ahead and delete that row.
+    context: The agent warned that other cells read row 12 and asked for consent (job K2, no file).
+    expected: confirm
+    confirm: true
+  - id: k03
+    language: tr
+    request: Özet sayfasındaki formülleri sabit değerlere çevir.
+    files: [panel.xlsx]
+    expected: confirm
+    confirm: false
+    note: The user has not agreed yet; the agent asks first. confirm must stay false.
+  - id: k04
+    language: en
+    request: Delete slide 3, the one the agenda links to.
+    files: [deck.pptx]
+    expected: confirm
+    confirm: false

@@ -16,6 +16,11 @@ node_modules/
 __pycache__/
 *.pyc
 .venv/
+*.egg-info/
+
+# MCP servisi dağıtım değerleri (token, yollar) — asla commit etme
+deploy/stack.env
+deploy/service.env
 
 # geçici
 *.tmp

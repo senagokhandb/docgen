@@ -1,0 +1,77 @@
+# Deployment package of the document agent's MCP service. Developed by Digital Brain Technologies.
+#
+# The service, next to Gotenberg and the agent image of ../docker-compose.yml (included:
+# one project, one network "docgen", one Gotenberg). Every job runs in its own
+# docgen-agent container, started through the host's docker socket.
+#
+# Once:    ./deploy/generate-secrets.sh                      (writes deploy/stack.env)
+#          cp deploy/service.env.example deploy/service.env  and adjust it
+#          cp .env.example .env                              (the agent's model endpoint)
+# Build:   docker compose -f deploy/compose.yml --env-file deploy/stack.env build
+# Start:   docker compose -f deploy/compose.yml --env-file deploy/stack.env up -d docgen-mcp
+# Status:  curl http://127.0.0.1:18766/health
+# Stop:    docker compose -f deploy/compose.yml --env-file deploy/stack.env stop docgen-mcp gotenberg
+#
+# Start the service by name: `up -d` without a name would also start the one-shot
+# `agent` service of ../docker-compose.yml.
+#
+# SECURITY: the docker socket gives the service control over the host's docker daemon,
+# which is root on the host. Keep the port on the loopback interface (or behind a
+# reverse proxy with TLS) and the token secret; see docs/INTEGRATION.md, section 1.
+
+name: docgen
+
+include:
+  - ../docker-compose.yml
+
+services:
+  docgen-mcp:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+    image: docgen-service:${DOCGEN_VERSION:-1.1.0}
+    container_name: docgen-mcp
+    platform: ${DOCGEN_PLATFORM:-}
+    restart: unless-stopped
+    env_file:
+      - service.env
+    environment:
+      DOCGEN_MCP_HTTP_TOKEN: ${DOCGEN_MCP_HTTP_TOKEN:?run deploy/generate-secrets.sh}
+      # The job workspaces: /jobs here, DOCGEN_JOBS_HOST_DIR for the docker daemon (the
+      # job containers' bind mounts are host paths).
+      DOCGEN_JOBS_DIR: /jobs
+      DOCGEN_JOBS_HOST_DIR: ${DOCGEN_JOBS_HOST_DIR:?run deploy/generate-secrets.sh}
+      DOCGEN_AGENT_ENV_FILE: /run/docgen/agent.env
+      DOCGEN_GOTENBERG_URL: http://gotenberg:3000
+      DOCGEN_DOCKER_NETWORK: docgen
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCGEN_JOBS_HOST_DIR:?run deploy/generate-secrets.sh}:/jobs
+      # The agent's model configuration, passed to every job container (--env-file).
+      - ../.env:/run/docgen/agent.env:ro
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    ports:
+      # Published on the loopback interface of the host only. Put a reverse proxy with TLS
+      # in front of it, or join the network of the host system, to reach it from elsewhere.
+      - "127.0.0.1:${DOCGEN_MCP_PORT:-18766}:8766"
+    networks:
+      - docgen
+    depends_on:
+      - gotenberg
+    # SIGTERM: running tool calls get DOCGEN_MCP_SHUTDOWN_GRACE_SECONDS, then running jobs
+    # are stopped and recorded as interrupted.
+    stop_grace_period: 60s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/docgen
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
